@@ -1,5 +1,5 @@
 from core.base_app import BaseApp
-from core.utils import copPlot
+from core.utils import Plot2D
 import traceback
 import logging
 import matplotlib.pyplot as plt
@@ -64,8 +64,8 @@ class TesteEvasaoObstaculos(BaseApp):
         self.q = np.array([0,0,0])
 
         # velocidades
-        self.v = 0.2 
-        self.w = np.deg2rad(-10)
+        self.v = 1 
+        self.w = np.deg2rad(-100)
 
         # Modelo cinemático do Pioneer P3DX
         self.wl = self.v / self.r - (self.w * self.L) / (2 * self.r)
@@ -88,11 +88,8 @@ class TesteEvasaoObstaculos(BaseApp):
         # Configuração inicial
         dt = self.sim.getSimulationTimeStep()
 
-        # Cinemática Direta
-        Mdir = np.array([[self.r*np.cos(self.q[2])/2, self.r*np.cos(self.q[2])/2], [self.r*np.sin(self.q[2])/2, self.r*np.sin(self.q[2])/2], [self.r/self.L, -self.r/self.L]])
-        
         # Calculando posição
-        self.q = self.q + (Mdir @ self.u) * dt
+        self.q = self.sim.getObjectPosition(self.robotHandle, self.sim.handle_world)
 
         self.traj.append(self.q.copy())
         
@@ -109,7 +106,7 @@ class TesteEvasaoObstaculos(BaseApp):
         ori = self.sim.getObjectOrientation(self.robotHandle, self.sim.handle_world)
         logger.debug(f'SIM Ori: {np.rad2deg(ori)}')
 
-        copPlot(self.traj, 'X (m)', 'Y (m)',title="Trajetória do RobÔ")
+        Plot2D(self.traj, 'X (m)', 'Y (m)', title="Trajetória do Robô")
         
 
 def app():
