@@ -54,10 +54,24 @@ Classe base que fornece toda a infraestrutura de gerenciamento da simulação:
 
 #### Utils (core/utils.py)
 
-Funções utilitárias para plotagem de dados:
+**Sistema de Logging Profissional:**
 
-- `Plot2D(data, x_label, y_label, ...)` - Gráficos 2D com XY
-- `Plot3D(data, x_label, y_label, z_label, ...)` - Gráficos 3D com XYZ
+- `ProfessionalFormatter` - Formata logs com estrutura: `[NÍVEL] [ORIGEM] [TIMESTAMP] mensagem`
+- `setup_logger(name, origin_prefix)` - Cria logger padronizado para uso em qualquer arquivo
+  
+Exemplo de saída:
+```
+[INFO] [MAIN] [14:32:45] Conectado ao simulador com sucesso
+[ERROR] [APP] [14:32:47] Erro ao ler sensor LIDAR
+[DEBUG] [APP] [14:32:48] LIDAR [2.45s] Esq: 1.50m | Frente: 2.30m | Dir: 1.20m
+```
+
+**Funções de Plotagem:**
+
+- `Plot2D(data, x_label, y_label, tamanho_janela, limite_x, limite_y, title)` - Gráficos 2D com XY
+- `Plot3D(data, x_label, y_label, z_label, tamanho_janela, limite_x, limite_y, limite_z, title)` - Gráficos 3D com XYZ
+
+Ambas marcam ponto inicial (verde) e final (vermelho) da trajetória.
 
 ## Criando uma Nova Simulação
 
@@ -67,10 +81,10 @@ Crie um arquivo em `apps/` que herde de `BaseApp`:
 
 ```python
 from core.base_app import BaseApp
-import logging
+from core.utils import setup_logger
 import numpy as np
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__, '[APP]')
 
 class MinhaSimulacao(BaseApp):
     """Descrição do teste/simulação."""
@@ -116,7 +130,10 @@ def setup(self):
     
     # Valida handles
     if self.robot_handle == -1:
+        logger.error("Robot não encontrado na cena!")
         raise RuntimeError("Robot não encontrado na cena!")
+    
+    logger.debug(f"Handles obtidos: robot={self.robot_handle}")
     
     # Inicializa dados
     self.position = np.array([0, 0, 0])
@@ -154,35 +171,73 @@ def loop(self, t):
 
 #### stop()
 
-Executado após a simulação terminar. Ideal para limpeza e análise final.
+Executado após a simulação terminar. Ideal para parada segura e análise final.
 
 ```python
 def stop(self):
     logger.info("Finalizando simulação...")
     
-    # Parar motores (segurança)
-    self.sim.setJointTargetVelocity(self.left_motor, 0)
-    self.sim.setJointTargetVelocity(self.right_motor, 0)
+    # Parar motores (IMPORTANTE para segurança)
+    try:
+        self.sim.setJointTargetVelocity(self.left_motor, 0)
+        self.sim.setJointTargetVelocity(self.right_motor, 0)
+        logger.info("Motores parados com sucesso")
+    except Exception as e:
+        logger.error(f"Erro ao parar motores: {e}")
     
-    # Plotar trajetória
+    # Análise e plotagem (com Plot2D padrão)
     from core.utils import Plot2D
-    Plot2D(self.trajectory, 'X (m)', 'Y (m)', title="Trajetória do Robô")
+    Plot2D(self.trajectory, 'X (m)', 'Y (m)', 
+           tamanho_janela=(10, 8),
+           title="Trajetória do Robô")
 ```
 
 #### post_start() (Opcional)
 
-Executado logo após `startSimulation()`. Útil para diagnósticos rápidos.
+Executado logo após `startSimulation()` e ANTES do loop principal. Útil para diagnósticos rápidos e captura de dados iniciais.
 
 ```python
 def post_start(self):
-    """Teste rápido: enviar um pulso de controle para validar conexão."""
-    logger.debug("Testando motores...")
+    """Testes iniciais que requerem simulação já em execução."""
+    logger.info("Executando diagnóstico inicial...")
+    
+    # Enviar pulso de teste
     self.sim.setJointTargetVelocity(self.left_motor, 0.1)
     time.sleep(0.1)
     self.sim.setJointTargetVelocity(self.left_motor, 0)
+    
+    logger.debug("Diagnóstico concluído com sucesso")
 ```
 
-### Passo 3: Criar o Ponto de Entrada
+### Passo 3: Sistema de Logging Profissional
+
+O framework usa um sistema de logging padronizado sem emojis. Cada arquivo deve importar seu logger assim:
+
+```python
+from core.utils import setup_logger
+
+# Em main.py:
+logger = setup_logger(__name__, '[MAIN]')
+
+# Em apps/minha_simulacao.py:
+logger = setup_logger(__name__, '[APP]')
+```
+
+**Saída gerada:**
+```
+[INFO] [MAIN] [14:32:45] Conectado ao simulador com sucesso
+[ERROR] [APP] [14:32:47] Erro ao ler sensor LIDAR
+[DEBUG] [APP] [14:32:48] LIDAR [2.45s] Esq: 1.50m | Frente: 2.30m
+```
+
+**Níveis de Log:**
+- `logger.debug(msg)` - Detalhes técnicos (desabilitado em produção)
+- `logger.info(msg)` - Informações importantes
+- `logger.warning(msg)` - Avisos (situação anômala mas segura)
+- `logger.error(msg)` - Erros recuperáveis
+- `logger.critical(msg)` - Falhas críticas
+
+### Passo 4: Criar o Ponto de Entrada
 
 No final do arquivo, crie a função `app()`:
 
@@ -193,7 +248,7 @@ def app():
     simulation.run()
 ```
 
-### Passo 4: Executar
+### Passo 5: Executar
 
 No `main.py`, importe e execute:
 
@@ -207,7 +262,7 @@ if __name__ == "__main__":
 Ou execute diretamente:
 
 ```bash
-python -m apps.minha_simulacao
+python main.py
 ```
 
 ## Métodos Obrigatórios e Opcionais
@@ -251,6 +306,91 @@ python main.py
 - Pressionar 's' durante execução: interrompe a simulação
 - Ctrl+C: interrupção de emergência
 
+## Otimizações e Boas Práticas
+
+### Sistema de Logging
+
+O projeto usa `ProfessionalFormatter` e `setup_logger()` para garantir:
+- Logs consistentes e profissionais (sem emojis)
+- Identificação clara de origem (`[MAIN]` vs `[APP]`)
+- Timestamps para debug temporal
+- Facilita análise de problemas
+
+### Funções de Plotagem
+
+Use `Plot2D()` e `Plot3D()` em vez de matplotlib direto:
+```python
+# BOA PRATICA:
+from core.utils import Plot2D
+Plot2D(trajectory, 'X (m)', 'Y (m)', title="Minha Trajetória")
+
+# EVITAR:
+import matplotlib.pyplot as plt
+plt.plot(...)  # Sem padrão
+```
+
+**Ganhos:** Interface consistente, código limpo, manutenção facilitada
+
+### Pré-cálculo de Constantes
+
+Em simulações com loop rápido (60+ ciclos/s), pré-calcule valores em `setup()`:
+
+```python
+def setup(self):
+    # BOM: Calcular UMA VEZ
+    self.idx_frente = self.n_pontos // 2
+    self.idx_esq = (3 * self.n_pontos) // 4
+    
+def loop(self, t):
+    # USAR no loop
+    valor = dados[self.idx_frente]
+
+# EVITAR: Calcular a cada loop
+def loop(self, t):
+    idx = int(len(dados) / 2)  # Operação matemática desnecessária
+```
+
+**Ganho:** Reduz operações em ~180 ops/s para loops de 60 Hz
+
+### Validação Robusta de Dados
+
+Sempre valide dados de sensores:
+
+```python
+# BOM:
+data = np.asarray(sensor.getData())
+if data is None or data.size == 0:
+    return
+if data.ndim != 2 or data.shape[1] < 2:
+    logger.error(f"Formato inválido: {data.shape}")
+    return
+
+# EVITAR:
+data = sensor.getData()
+if len(data) == 0:  # Pode falhar se data for escalar
+    return
+```
+
+### Separação de Responsabilidades
+
+Use `post_start()` para inicializações que requerem simulação em execução:
+
+```python
+# BOM:
+def post_start(self):
+    """Captura dados iniciais do sensor"""
+    sensor_data = self.sensor.getData()
+    
+def loop(self, t):
+    """Apenas lógica de controle"""
+    
+# EVITAR:
+def loop(self, t):
+    if self._first_exec:
+        sensor_data = self.sensor.getData()  # Flag desnecessária
+    self._first_exec = False
+```
+
 ## Troubleshooting
 
 ### "Código congela ao conectar"
@@ -269,7 +409,38 @@ Verifique:
 Verifique se a RemoteAPI está ativada no CoppeliaSim:
 - Menu: `Tools > Remote API server` deve estar **ligado**
 
+### "TypeError: len() of unsized object"
+
+Sensor retornou dados em formato inválido. Verifique:
+1. Sensor conectado corretamente no CoppeliaSim
+2. Validações em `loop()` tratam dados escalar/vazio
+3. Logs indicam `shape_do_sensor` esperado
+
+## Histórico de Melhorias
+
+### v1.1 - Sistema de Logging Profissional
+- Removidos todos os emojis
+- Criado `ProfessionalFormatter` com estrutura padronizada
+- Função `setup_logger()` para uso consistente
+- Logs rastreáveis com timestamp e origem
+
+### v1.0 - Framework Base
+- Classe `BaseApp` com ciclo de vida completo
+- Métodos `setup()`, `loop(t)`, `stop()`, `post_start()`
+- Conexão RemoteAPI com CoppeliaSim
+- Funções `Plot2D()` e `Plot3D()` reutilizáveis
+
 ## Contribuições
 
-Adicione novas simulações seguindo o padrão de herança de `BaseApp`. Mantenha a estrutura do projeto organizada.
+Para adicionar novas simulações:
+
+1. Crie arquivo em `apps/seu_teste.py`
+2. Herde de `BaseApp`
+3. Implemente `setup()` e `loop(t)`
+4. Use `setup_logger()` para logging
+5. Adicione função `app()` como ponto de entrada
+6. Teste com `python main.py`
+
+Mantenha a estrutura do projeto organizada e siga o padrão de logging profissional.
+
 
