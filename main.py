@@ -100,7 +100,7 @@ def main():
 
                     # Dica interativa para o usuário (mantemos prints para UX)
                     print("-" * 40)
-                    print("💡 DICA: O CoppeliaSim está aberto?")
+                    print("DICA: O CoppeliaSim está aberto?")
                     print("Certifique-se de que o simulador está rodando antes de iniciar um teste.")
                     print("-" * 40)
                     

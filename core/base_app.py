@@ -33,8 +33,8 @@ class BaseApp:
         self.sim_time = sim_time
         
         # Avisa o usuário ANTES do código travar
-        logger.info("\n⏳ Tentando conectar ao motor do CoppeliaSim...")
-        logger.info("👉 (Se o terminal travar nesta mensagem, o simulador está FECHADO. Abra o CoppeliaSim!)")
+        logger.info("\nTentando conectar ao motor do CoppeliaSim...")
+        logger.info("(Se o terminal travar nesta mensagem, o simulador está FECHADO. Abra o CoppeliaSim!)")
         
         try:
 
@@ -94,7 +94,7 @@ class BaseApp:
                 # Verificação de interrupção rápida pelo usuário.
                 # Pressionar 's' interrompe a simulação imediatamente.
                 if keyboard.is_pressed('s'):
-                    logger.warning(f"\n⚠️ Simulação interrompida pelo usuário no tempo {t:.2f}s.")
+                    logger.warning(f"\nSimulação interrompida pelo usuário no tempo {t:.2f}s.")
                     break
                 
                 self.loop(t)
@@ -103,7 +103,7 @@ class BaseApp:
                 self.client.step()
                 
         except KeyboardInterrupt:
-            logger.warning("\n⚠️ Simulação interrompida manualmente no terminal.")
+            logger.warning("\nSimulação interrompida manualmente no terminal.")
             
         finally:
             # Para a simulação independentemente de erro ou sucesso
