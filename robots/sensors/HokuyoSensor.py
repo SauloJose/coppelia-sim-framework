@@ -1,4 +1,3 @@
-import time
 import math
 import numpy as np
 
@@ -40,7 +39,7 @@ class HokuyoSensorSim(object):
     _sim = None
 
     _base_name = ""
-    _vision_sensor_name_template = "{}/sensor{}"
+    _vision_sensor_name_template = "{}/fastHokuyo_body/fastHokuyo_joint{}/fastHokuyo_sensor{}"
 
     # _vision_sensors_obj will be initialized in __init__
     _base_obj = None
@@ -67,8 +66,8 @@ class HokuyoSensorSim(object):
             )
 
         self._vision_sensors_obj = [
-            sim.getObject(self._vision_sensor_name_template.format(self._base_name, 1)),
-            sim.getObject(self._vision_sensor_name_template.format(self._base_name, 2)),
+            sim.getObject(self._vision_sensor_name_template.format(self._base_name, 1,1)),
+            sim.getObject(self._vision_sensor_name_template.format(self._base_name, 2,2)),
         ]
 
         if any(obj == -1 for obj in self._vision_sensors_obj):
@@ -86,27 +85,30 @@ class HokuyoSensorSim(object):
         
         angle = self._angle_min
         sensor_data = []
-        sim = self.sim 
-        for vision_sensor in self._vision_sensors_obj:
-            r, t, u = sim.readVisionSensor(vision_sensor)
-            if u:
-                sensorM = sim.getObjectMatrix(vision_sensor)
-                relRefM = sim.getObjectMatrix(self._base_obj)
-                relRefM = sim.getMatrixInverse(relRefM)
-                relRefM = sim.multiplyMatrices(relRefM, sensorM)
+        
+        try:
+            for vision_sensor in self._vision_sensors_obj:
+                r, t, u = self._sim.readVisionSensor(vision_sensor)
+                if u:
+                    sensorM = self._sim.getObjectMatrix(vision_sensor)
+                    relRefM = self._sim.getObjectMatrix(self._base_obj)
+                    relRefM = self._sim.getMatrixInverse(relRefM)
+                    relRefM = self._sim.multiplyMatrices(relRefM, sensorM)
 
-                p = [0, 0, 0]
-                p = sim.multiplyVector(sensorM, p)
-                t = [p[0], p[1], p[2], 0, 0, 0]
-                for j in range(int(u[1])):
-                    for k in range(int(u[0])):
-                        w = 2 + 4 * (j * int(u[0]) + k)
-                        v = [u[w], u[w + 1], u[w + 2], u[w + 3]]
-                        angle = angle + self._angle_increment
-                        if self._is_range_data:
-                            sensor_data.append([angle, v[3]])
-                        else:
-                            p = sim.multiplyVector(relRefM, v)
-                            sensor_data.append([p[0], p[1], p[2]])
-                            
+                    p = [0, 0, 0]
+                    p = self._sim.multiplyVector(sensorM, p)
+                    t = [p[0], p[1], p[2], 0, 0, 0]
+                    for j in range(int(u[1])):
+                        for k in range(int(u[0])):
+                            w = 2 + 4 * (j * int(u[0]) + k)
+                            v = [u[w], u[w + 1], u[w + 2], u[w + 3]]
+                            angle = angle + self._angle_increment
+                            if self._is_range_data:
+                                sensor_data.append([angle, v[3]])
+                            else:
+                                p = self._sim.multiplyVector(relRefM, v)
+                                sensor_data.append([p[0], p[1], p[2]])
+        except Exception as e:
+            return  -1
+                 
         return np.array(sensor_data)

@@ -56,7 +56,7 @@ def main():
 
     # 2. Monta o Menu
     print("\n" + "="*40)
-    print("🤖 MENU DO SIMULADOR COPPELIASIM 🤖")
+    print(" MENU DO SIMULADOR COPPELIASIM ")
     print("="*40)
     print("Selecione o teste que deseja executar:\n")
     
@@ -79,7 +79,7 @@ def main():
             
             if 0 <= indice < len(lista_testes):
                 nome_selecionado = lista_testes[indice]
-                print(f"\n🚀 Iniciando o teste: {nome_selecionado} 🚀\n")
+                print(f"\n Iniciando o teste: {nome_selecionado} \n")
                 
                 # 4. Importação e Execução Dinâmica
                 try:
@@ -90,13 +90,13 @@ def main():
                     if hasattr(modulo, 'app'):
                         modulo.app()
                     else:
-                        print(f"❌ Erro: O arquivo '{nome_selecionado}.py' não possui uma função chamada 'app()'.")
+                        print(f" [Erro]: O arquivo '{nome_selecionado}.py' não possui uma função chamada 'app()'.")
                         print("Certifique-se de que o código dentro dele está dentro de um 'def app():'.")
                         
                 except ImportError as e:
-                    logger.error(f"❌ Erro ao tentar carregar o teste '{nome_selecionado}': {e}")
+                    logger.error(f" [Erro] ao tentar carregar o teste '{nome_selecionado}': {e}")
                 except Exception:
-                    logger.exception(f"❌ Erro crítico ao executar o teste '{nome_selecionado}'.")
+                    logger.exception(f"[Exception] Erro crítico ao executar o teste '{nome_selecionado}'.")
 
                     # Dica interativa para o usuário (mantemos prints para UX)
                     print("-" * 40)
@@ -106,9 +106,9 @@ def main():
                     
                 break # Encerra o menu após rodar o teste
             else:
-                print("❌ Erro: Número fora da lista. Tente novamente.")
+                print("[Erro] Número fora da lista. Tente novamente.")
         else:
-            print("❌ Erro: Por favor, digite apenas números válidos.")
+            print("[Erro] Por favor, digite apenas números válidos.")
 
 if __name__ == '__main__':
     main()

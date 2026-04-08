@@ -23,9 +23,6 @@ def draw_laser_data(laser_data, max_sensor_range=5, show=False, save_path=None):
     fig = plt.figure(figsize=(6, 6), dpi=100)
     ax = fig.add_subplot(111, aspect='equal')
 
-    if laser_data is None:
-        return 
-
     # Combine angle and distance data for plotting
     for ang, dist in laser_data:
         # Filter out readings that are at the maximum range
@@ -78,7 +75,7 @@ class TesteEvasaoObstaculos(BaseApp):
         # auto_diagnostic: se True, após startSimulation executa um pulso curto
         # nas rodas para validar que os comandos são aplicados.
         self.auto_diagnostic = False
-        super().__init__(scene_file="labirinto.ttt", sim_time=60.0)
+        super().__init__(scene_file="house.ttt", sim_time=60.0)
         self._first_exec = True #flag
 
     def setup(self):
@@ -168,7 +165,7 @@ class TesteEvasaoObstaculos(BaseApp):
             logger.info("Diagnóstico concluído: pulso finalizado")
 
     def loop(self, t):
-        # Fazendo leitura do laser
+        # Fazendo leitura do LIDAR
         try:
             laser_data = np.asarray(self.hokuyo_sensor.getSensorData())
             #print(laser_data)
@@ -201,8 +198,8 @@ class TesteEvasaoObstaculos(BaseApp):
         v = 0.0
         w = 0.0
         
-        # Consideramos 0.6 metros como uma distância perigosa
-        if dist_frente > 0.6:
+        # Consideramos 0.8 metros como uma distância perigosa
+        if dist_frente > 0.8:
             # Caminho livre! Vai reto.
             v = 0.4
             w = 0.0
@@ -211,10 +208,10 @@ class TesteEvasaoObstaculos(BaseApp):
             v = -1 
             if dist_esq > dist_dir:
                 # Esquerda está mais livre, gira pra esquerda (positivo)
-                w = np.deg2rad(40)
+                w = np.deg2rad(180)
             else:
                 # Direita está mais livre, gira pra direita (negativo)
-                w = np.deg2rad(-40)
+                w = np.deg2rad(-180)
 
         # Modelo cinemático do Pioneer P3DX
         wl = v / self.r - (w * self.L) / (2 * self.r)

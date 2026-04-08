@@ -19,6 +19,9 @@ from coppeliasim_zmqremoteapi_client import RemoteAPIClient
 import keyboard
 import sys 
 import time 
+import logging
+
+logger = logging.getLogger(__name__)
 
 class BaseApp:
     """Classe base que fornece o ciclo de vida mínimo de uma aplicação de simulação.
@@ -30,8 +33,8 @@ class BaseApp:
         self.sim_time = sim_time
         
         # Avisa o usuário ANTES do código travar
-        print("\n⏳ Tentando conectar ao motor do CoppeliaSim...")
-        print("👉 (Se o terminal travar nesta mensagem, o simulador está FECHADO. Abra o CoppeliaSim!)")
+        logger.info("\n⏳ Tentando conectar ao motor do CoppeliaSim...")
+        logger.info("👉 (Se o terminal travar nesta mensagem, o simulador está FECHADO. Abra o CoppeliaSim!)")
         
         try:
 
@@ -47,56 +50,66 @@ class BaseApp:
 
 
             # Se passou da linha de cima, deu certo!
-            print("✅ Conectado ao simulador com sucesso!\n")
+            logger.info("✅ Conectado ao simulador com sucesso!\n")
             
         except Exception as e:
-            print("\n❌ ERRO DE CONEXÃO: Não foi possível estabelecer comunicação.")
-            print(f"Detalhes: {e}")
+            logger.exception("\n❌ ERRO DE CONEXÃO: Não foi possível estabelecer comunicação.")
+            logger.error(f"Detalhes: {e}")
             sys.exit(1)
 
     def run(self):
         """Método principal que gerencia o ciclo de vida da simulação."""
-        # 1. Carrega a cena (se especificada)
+        # Carrega a cena (se especificada)
         if self.scene_file:
             # O CoppeliaSim exige caminhos ABSOLUTOS para carregar cenas
             scene_path = os.path.abspath(f"scenes/{self.scene_file}")
             if not os.path.exists(scene_path):
                 raise FileNotFoundError(f"Cena não encontrada: {scene_path}")
             
-            print(f"Carregando cena: {self.scene_file}...")
-            self.sim.loadScene(scene_path)
+            logger.info(f"Carregando cena: {self.scene_file}...")
+            self.sim.loadScene(scene_path)   #Carregar uma cena, arquivo .ttt
 
-        # 2. Configura modo síncrono
-        self.sim.setStepping(True)
+        # Configura modo síncrono
+        self.client.setStepping(True)
 
-        # 3. Executa o setup específico do teste (definido pelo filho)
+        # Executa o setup específico do teste (definido pelo filho)
         self.setup()
 
-        # 4. Inicia a simulação
-        print("Iniciando simulação...")
+        # Inicia a simulação
+        logger.info("Iniciando simulação...")
         self.sim.startSimulation()
 
-        # 5. Loop principal no tempo programado
+        # Hook executado logo APÓS o startSimulation() e ANTES do loop principal.
+        # Subclasses podem sobrescrever `post_start()` para executar ações
+        # que precisam da simulação já em execução (ex.: diagnóstico rápido).
+        try:
+            self.post_start()
+        except Exception:
+            logger.exception("Erro em post_start()")
+
+        # Loop principal no tempo programado
         try:
             while (t := self.sim.getSimulationTime()) < self.sim_time:
                 
                 # Verificação de interrupção rápida pelo usuário.
                 # Pressionar 's' interrompe a simulação imediatamente.
                 if keyboard.is_pressed('s'):
-                    print(f"\n⚠️ Simulação interrompida pelo usuário no tempo {t:.2f}s.")
+                    logger.warning(f"\n⚠️ Simulação interrompida pelo usuário no tempo {t:.2f}s.")
                     break
                 
                 self.loop(t)
                 
                 # Avança um passo no simulador
-                self.sim.step()
+                self.client.step()
                 
         except KeyboardInterrupt:
-            print("\n⚠️ Simulação interrompida manualmente no terminal.")
+            logger.warning("\n⚠️ Simulação interrompida manualmente no terminal.")
             
         finally:
-            # 6. Para a simulação independentemente de erro ou sucesso
-            print("Parando simulação...")
+            # Para a simulação independentemente de erro ou sucesso
+            logger.info("Parando simulação...")
+
+            self.stop() #Procedimento para quando parar a simulação
             self.sim.stopSimulation()
 
     # ==========================================
@@ -106,6 +119,19 @@ class BaseApp:
         """Executado uma vez ANTES da simulação começar (ideal para pegar handles)."""
         pass
 
-    def loop(self, t):
+    def post_start(self):
+        """Hook executado imediatamente após `startSimulation()`.
+
+        Subclasses podem sobrescrever este método para executar rotinas que
+        exigem que a simulação já esteja em execução (ex.: checagens rápidas,
+        diagnóstico de atuadores, etc.). O padrão é não fazer nada.
+        """
+        return
+
+    def loop(self, t): 
         """Executado a cada passo da simulação (ideal para controle e sensores)."""
         pass
+
+    def stop(self):
+        """Executado após a finalização da simulação"""
+        pass 
