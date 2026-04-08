@@ -1,4 +1,5 @@
 from core.base_app import BaseApp
+from core.utils import setup_logger
 import traceback
 import logging
 import matplotlib.pyplot as plt
@@ -7,7 +8,7 @@ from robots.sensors.HokuyoSensor import HokuyoSensorSim
 import time
 import math
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__, '[APP]')
 
 """
 Plots the laser scan data.
@@ -112,7 +113,7 @@ class TesteEvasaoObstaculos(BaseApp):
 
         # Posição inicial do robô
         pos = self.sim.getObjectPosition(self.robotHandle, self.sim.handle_world)
-        logger.info(f'📍 Posição inicial do robô: {pos}')
+        logger.info(f'Posição inicial do robô: {pos}')
         
         # Dados do Pioneer
         self.L = 0.381  # Metros

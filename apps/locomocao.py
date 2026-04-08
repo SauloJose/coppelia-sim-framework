@@ -1,5 +1,5 @@
 from core.base_app import BaseApp
-from core.utils import Plot2D
+from core.utils import Plot2D, setup_logger
 import traceback
 import logging
 import matplotlib.pyplot as plt
@@ -8,7 +8,7 @@ from robots.sensors.HokuyoSensor import HokuyoSensorSim
 import time
 import math
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__, '[APP]')
 
 class TesteEvasaoObstaculos(BaseApp):
     """Teste de evasão de obstáculos.
@@ -147,9 +147,9 @@ class TesteEvasaoObstaculos(BaseApp):
         try:
             self.sim.setJointTargetVelocity(self.l_wheel, self.wl)
             self.sim.setJointTargetVelocity(self.r_wheel, self.wr)
-            logger.debug(f"[{sim_time:.3f}s] Velocidades: wl={self.wl:.4f}, wr={self.wr:.4f} (v={self.v:.3f}, w={self.w:.3f})")
+            logger.debug(f"Velocidades enviadas: wl={self.wl:.4f}, wr={self.wr:.4f} (v={self.v:.3f}, w={self.w:.3f})")
         except Exception as e:
-            logger.exception("Falha ao aplicar velocidades nas juntas.")
+            logger.error("Falha ao aplicar velocidades nas juntas.")
 
         # Obter e registrar posição real do robô
         pos_real = self.sim.getObjectPosition(self.robotHandle, self.sim.handle_world)

@@ -8,15 +8,9 @@ Uso:
 """
 import importlib
 from pathlib import Path
-import logging
+from core.utils import setup_logger
 
-# Configuração básica de logging. Em ambientes maiores, remova o basicConfig
-# e configure logging via arquivo ou dictConfig conforme necessidade.
-logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
-logger = logging.getLogger(__name__)
-
-# Sugestão: para execução em ambientes reais, considere usar o módulo `logging`
-# em vez de `print` para melhor controle de níveis e saída.
+logger = setup_logger(__name__, '[MAIN]')
 
 def listar_testes():
     """Lê a pasta 'apps' e retorna uma lista com o nome dos arquivos de teste."""
@@ -25,7 +19,7 @@ def listar_testes():
     
     # Verifica se a pasta existe antes de tentar ler
     if not pasta_apps.exists() or not pasta_apps.is_dir():
-        logger.warning("⚠️  Aviso: A pasta 'apps' não foi encontrada.")
+        logger.warning("Aviso: A pasta 'apps' não foi encontrada.")
         return testes
         
     # Procura todos os arquivos que terminam com .py na pasta apps
@@ -51,7 +45,7 @@ def main():
     lista_testes = listar_testes()
     
     if not lista_testes:
-        print("Nenhum teste encontrado na pasta 'apps/'. Crie seus arquivos .py primeiro!")
+        logger.error("Nenhum teste encontrado na pasta 'apps/'.")
         return
 
     # 2. Monta o Menu
@@ -79,7 +73,7 @@ def main():
             
             if 0 <= indice < len(lista_testes):
                 nome_selecionado = lista_testes[indice]
-                print(f"\n Iniciando o teste: {nome_selecionado} \n")
+                logger.info(f"Iniciando o teste: {nome_selecionado}")  
                 
                 # 4. Importação e Execução Dinâmica
                 try:
@@ -90,25 +84,18 @@ def main():
                     if hasattr(modulo, 'app'):
                         modulo.app()
                     else:
-                        print(f" [Erro]: O arquivo '{nome_selecionado}.py' não possui uma função chamada 'app()'.")
-                        print("Certifique-se de que o código dentro dele está dentro de um 'def app():'.")
+                        logger.error(f"Arquivo '{nome_selecionado}.py' não possui função 'app()'")
                         
                 except ImportError as e:
-                    logger.error(f" [Erro] ao tentar carregar o teste '{nome_selecionado}': {e}")
-                except Exception:
-                    logger.exception(f"[Exception] Erro crítico ao executar o teste '{nome_selecionado}'.")
-
-                    # Dica interativa para o usuário (mantemos prints para UX)
-                    print("-" * 40)
-                    print("DICA: O CoppeliaSim está aberto?")
-                    print("Certifique-se de que o simulador está rodando antes de iniciar um teste.")
-                    print("-" * 40)
+                    logger.error(f"Erro ao tentar carregar o teste '{nome_selecionado}': {e}")
+                except Exception as e:
+                    logger.error(f"Erro crítico ao executar o teste '{nome_selecionado}': {type(e).__name__}: {e}")
                     
                 break # Encerra o menu após rodar o teste
             else:
-                print("[Erro] Número fora da lista. Tente novamente.")
+                logger.error("Número fora da lista. Tente novamente.")
         else:
-            print("[Erro] Por favor, digite apenas números válidos.")
+            logger.error("Por favor, digite apenas números válidos.")
 
 if __name__ == '__main__':
     main()

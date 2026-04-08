@@ -1,4 +1,5 @@
 from core.base_app import BaseApp
+from core.utils import setup_logger
 import traceback
 import logging
 import matplotlib.pyplot as plt
@@ -7,60 +8,46 @@ from robots.sensors.HokuyoSensor import HokuyoSensorSim
 import time
 import math
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__, '[APP]')
 
 """
-Plots the laser scan data.
+Plota os dados do laser.
 """
-def draw_laser_data(laser_data, max_sensor_range=5, show=False, save_path=None):
-    """Plota os dados do laser.
-
-    Por padrão não bloqueia com uma GUI; se `show=True` tenta exibir a janela
-    (pode falhar em ambientes sem GUI). Se `save_path` for fornecido, salva a
-    imagem no caminho indicado.
+def draw_laser_data(laser_data, max_sensor_range=5, save_path=None):
+    """Plota cinemática do laser em um gráfico 2D.
+    
+    Args:
+        laser_data: Array com dados [ângulo, distância]
+        max_sensor_range: Alcance máximo do sensor
+        save_path: Caminho para salvar a imagem. Se None, usa timestamp.
     """
-
     fig = plt.figure(figsize=(6, 6), dpi=100)
     ax = fig.add_subplot(111, aspect='equal')
 
-    # Combine angle and distance data for plotting
+    # Plotar pontos do sensor
     for ang, dist in laser_data:
-        # Filter out readings that are at the maximum range
-        if (max_sensor_range - dist) > 0.1:
+        if (max_sensor_range - dist) > 0.1:  # Filtrar leituras no máximo alcance
             x = dist * np.cos(ang)
             y = dist * np.sin(ang)
-            c = 'r' if ang >= 0 else 'b'
-            ax.plot(x, y, 'o', color=c)
+            cor = 'r' if ang >= 0 else 'b'
+            ax.plot(x, y, 'o', color=cor, markersize=3)
 
-    # Plot the sensor's origin
-    ax.plot(0, 0, 'k>', markersize=10)
-
-    ax.grid(True)
+    # Marcar origem do sensor
+    ax.plot(0, 0, 'k>', markersize=10, label='Sensor')
+    ax.grid(True, alpha=0.3)
     ax.set_xlim([-max_sensor_range, max_sensor_range])
     ax.set_ylim([-max_sensor_range, max_sensor_range])
+    ax.set_xlabel('X (m)')
+    ax.set_ylabel('Y (m)')
+    ax.legend()
 
-    if save_path:
-        fig.savefig(save_path)
-        plt.close(fig)
-        logger.info(f"Laser plot salvo em: {save_path}")
-        return
-
-    if show:
-        try:
-            plt.show(block=False)
-            plt.pause(0.1)
-        except Exception:
-            # Ambiente sem GUI
-            logger.warning("Falha ao mostrar figura (sem GUI). Salvando em 'laser_plot.png'.")
-            fig.savefig('laser_plot.png')
-            plt.close(fig)
-    else:
-        # Default: save to a timestamped file to avoid blocking
-        timestamp = int(time.time())
-        filename = f'laser_plot_{timestamp}.png'
-        fig.savefig(filename)
-        plt.close(fig)
-        logger.info(f"Laser plot salvo em: {filename}")
+    # Salvar com timestamp se não especificado
+    if save_path is None:
+        save_path = f'laser_plot_{int(time.time())}.png'
+    
+    fig.savefig(save_path, dpi=100)
+    plt.close(fig)
+    logger.info(f"Gráfico do LIDAR salvo em: {save_path}")
 
 class TesteEvasaoObstaculos(BaseApp):
     """Teste de evasão de obstáculos.
@@ -72,11 +59,13 @@ class TesteEvasaoObstaculos(BaseApp):
 
     def __init__(self):
         # Indica à classe base qual cena carregar e por quanto tempo executar
-        # auto_diagnostic: se True, após startSimulation executa um pulso curto
-        # nas rodas para validar que os comandos são aplicados.
-        self.auto_diagnostic = False
         super().__init__(scene_file="house.ttt", sim_time=60.0)
-        self._first_exec = True #flag
+        
+        # Constantes da lógica de navegação
+        self.DIST_SEGURA = 0.8              # Distância considerada segura (metros)
+        self.ANGULO_GIRO = np.deg2rad(180)  # Ângulo para girar em obstáculo (radianos)
+        self.VEL_LINEAR = 0.4               # Velocidade linear ao avançar (m/s)
+        self.VEL_RECUA = -1.0               # Velocidade ao recuar (m/s)
 
     def setup(self):
         """Configura recursos necessários antes da simulação começar.
@@ -104,126 +93,118 @@ class TesteEvasaoObstaculos(BaseApp):
         else:
             logger.debug(f"Handles: robot={self.robotHandle}, left={self.l_wheel}, right={self.r_wheel}")
         
-        # Instância do sensor (não tentamos ler os dados aqui, pois a simulação ainda não começou)
-        self.hokuyo_sensor = HokuyoSensorSim(self.sim, "/" + self.robotname + "/fastHokuyo")
-
         # Posição inicial do robô
         pos = self.sim.getObjectPosition(self.robotHandle, self.sim.handle_world)
-        logger.info(f'📍 Posição inicial do robô: {pos}')
+        logger.info(f'Posição inicial do robô: {pos}')
         
-        # Dados do Pioneer
-        self.L = 0.381  # Metros
-        self.r = 0.0975 # Metros
+        # Parâmetros do Pioneer P3DX
+        self.L = 0.381   # Distância entre eixos (metros)
+        self.r = 0.0975  # Raio das rodas (metros)
+        
+        # Instância do sensor
+        self.hokuyo_sensor = HokuyoSensorSim(self.sim, "/" + self.robotname + "/fastHokuyo")
+        
+        # Pré-calcular índices do sensor (economiza operações no loop)
+        # Típico: 684 pontos, então frente=342, esq=513, dir=171
+        self.sensor_n_points = 684
+        self.idx_frente = self.sensor_n_points // 2
+        self.idx_esq = (3 * self.sensor_n_points) // 4
+        self.idx_dir = self.sensor_n_points // 4
+        logger.debug(f"Índices do sensor pré-calculados: frente={self.idx_frente}, esq={self.idx_esq}, dir={self.idx_dir}")
 
     def post_start(self):
-        """Executado logo após `startSimulation()` (veja `BaseApp.post_start`).
-
-        Se `self.auto_diagnostic` estiver True, executa um pulso de velocidade
-        curto para validar atuadores e handles.
-        """
-        if getattr(self, 'auto_diagnostic', False):
-            logger.info("Executando diagnóstico automático: pulso nas rodas.")
-            try:
-                # velocidade de teste e duração em segundos
-                self.diagnostic_pulse(duration=1.0, speed=0.6)
-            except Exception:
-                logger.exception("Falha no diagnóstico automático")
-
-    def diagnostic_pulse(self, duration=1.0, speed=0.6):
-        """Envia um pulso de velocidade nas rodas para testar atuação.
-
-        - duration: tempo (s) que o pulso dura
-        - speed: velocidade linear de referência (m/s) — convertida para wl/wr
-        """
-        if any(h == -1 for h in (self.l_wheel, self.r_wheel)):
-            logger.error("Cannot run diagnostic: invalid wheel handles")
-            return
-
-        # calcula wl/wr correspondentes a v=speed e w=0
-        v = float(speed)
-        w = 0.0
-        wl = v / self.r - (w * self.L) / (2 * self.r)
-        wr = v / self.r + (w * self.L) / (2 * self.r)
-
-        logger.debug(f"Diagnostic pulse: wl={wl:.3f}, wr={wr:.3f}, duration={duration}s")
-
-        start = self.sim.getSimulationTime()
-        try:
-            while (self.sim.getSimulationTime() - start) < duration:
-                self.sim.setJointTargetVelocity(self.l_wheel, wl)
-                self.sim.setJointTargetVelocity(self.r_wheel, wr)
-                # step para avançar a simulação durante o pulso
-                self.sim.step()
-
-        finally:
-            # Zeramos as velocidades ao final
-            try:
-                self.sim.setJointTargetVelocity(self.l_wheel, 0)
-                self.sim.setJointTargetVelocity(self.r_wheel, 0)
-            except Exception:
-                logger.exception("Falha ao zerar velocidades após diagnóstico")
-            logger.info("Diagnóstico concluído: pulso finalizado")
-
-    def loop(self, t):
-        # Fazendo leitura do LIDAR
+        """Executado logo após a simulação iniciar - captura primeira imagem do sensor LIDAR."""
+        logger.info("Capturando primeira imagem do sensor LIDAR...")
         try:
             laser_data = np.asarray(self.hokuyo_sensor.getSensorData())
-            #print(laser_data)
-            if self._first_exec is True:
-                draw_laser_data(laser_data, 5,True)
-            self._first_exec = False 
-        except Exception:
-            logger.exception("Erro lendo dados do sensor no loop.")
+            
+            # Validar forma do array (deve ser 2D: [pontos, 2])
+            if laser_data is None or laser_data.size == 0:
+                logger.warning("Sensor retornou dados vazios")
+                return
+            
+            if laser_data.ndim == 0:
+                logger.error(f"Sensor retornou valor escalar: {laser_data}")
+                return
+                
+            if laser_data.ndim != 2 or laser_data.shape[1] < 2:
+                logger.error(f"Formato incorreto do sensor: shape={laser_data.shape}, esperado (N, 2)")
+                return
+            
+            logger.info(f"Primeira imagem capturada com {laser_data.shape[0]} pontos")
+            draw_laser_data(laser_data, max_sensor_range=5)
+            
+        except Exception as e:
+            logger.error(f"Erro ao capturar dados iniciais do sensor: {e}")
+
+    def loop(self, t):
+        """Executado a cada passo da simulação."""
+        # Ler dados do LIDAR UMA VEZ por ciclo de simulação
+        try:
+            laser_data = np.asarray(self.hokuyo_sensor.getSensorData())
+        except Exception as e:
+            logger.error(f"Erro ao ler sensor LIDAR: {e}")
             return
 
-        n = len(laser_data)
+        # Validações de segurança: dados vazios ou formato inválido
+        if laser_data is None or laser_data.size == 0:
+            return
         
-        # Se a câmera ainda não darenderizou (primeiros instantes), apenas aguarda
-        if n == 0: return
+        if laser_data.ndim == 0:
+            logger.error(f"Sensor retornou valor escalar ao invés de array: {laser_data}")
+            return
+        
+        if laser_data.ndim != 2 or laser_data.shape[1] < 2:
+            logger.error(f"Formato do sensor inválido: shape={laser_data.shape}, esperado (N, 2)")
+            return
+        
+        # Atualizar índices dinamicamente se o tamanho mudar (raro, mas seguro)
+        n_atual = laser_data.shape[0]
+        if n_atual != self.sensor_n_points:
+            self.sensor_n_points = n_atual
+            self.idx_frente = self.sensor_n_points // 2
+            self.idx_esq = (3 * self.sensor_n_points) // 4
+            self.idx_dir = self.sensor_n_points // 4
+            logger.debug(f"Tamanho do sensor alterado para {self.sensor_n_points} pontos")
 
-        # Pega os índices baseados no tamanho do array de pontos (geralmente 684)
-        frente = int(n / 2)
-        lado_direito = int(n * 1 / 4)
-        lado_esquerdo = int(n * 3 / 4)
+        # Extrair distâncias nas três direções (coluna 1 = distância, coluna 0 = ângulo)
+        dist_frente = laser_data[self.idx_frente, 1]
+        dist_esq = laser_data[self.idx_esq, 1]
+        dist_dir = laser_data[self.idx_dir, 1]
 
-        # Lendo as distâncias exatas (a coluna 1 contém as distâncias, a 0 contém os ângulos)
-        dist_frente = laser_data[frente, 1]
-        dist_esq = laser_data[lado_esquerdo, 1]
-        dist_dir = laser_data[lado_direito, 1]
-
-        # Log dos dados do sensor (use nível DEBUG para não poluir o console em produção)
-        logger.debug(f"[{t:.2f}s] Sensor -> Esq: {dist_esq:.2f}m | Frente: {dist_frente:.2f}m | Dir: {dist_dir:.2f}m")
+        logger.debug(f"LIDAR [{t:.2f}s] Esq: {dist_esq:.2f}m | Frente: {dist_frente:.2f}m | Dir: {dist_dir:.2f}m")
 
         # === LÓGICA DE DESVIO DE OBSTÁCULOS ===
-        v = 0.0
-        w = 0.0
-        
-        # Consideramos 0.8 metros como uma distância perigosa
-        if dist_frente > 0.8:
-            # Caminho livre! Vai reto.
-            v = 0.4
+        if dist_frente > self.DIST_SEGURA:
+            # Caminho livre: avança reto
+            v = self.VEL_LINEAR
             w = 0.0
         else:
-            # Obstáculo na frente! Analisa qual lado tem mais espaço
-            v = -1 
-            if dist_esq > dist_dir:
-                # Esquerda está mais livre, gira pra esquerda (positivo)
-                w = np.deg2rad(180)
-            else:
-                # Direita está mais livre, gira pra direita (negativo)
-                w = np.deg2rad(-180)
+            # Obstáculo detectado: recua e gira para o lado mais livre
+            v = self.VEL_RECUA
+            w = self.ANGULO_GIRO if dist_esq > dist_dir else -self.ANGULO_GIRO
 
-        # Modelo cinemático do Pioneer P3DX
-        wl = v / self.r - (w * self.L) / (2 * self.r)
-        wr = v / self.r + (w * self.L) / (2 * self.r)
+        # Cinemática inversa: converter velocidade linear (v) e angular (w) 
+        # para velocidades das rodas esquerda (wl) e direita (wr)
+        wl = (v / self.r) - (w * self.L) / (2 * self.r)
+        wr = (v / self.r) + (w * self.L) / (2 * self.r)
 
-        # Enviando velocidades para os motores (log para diagnóstico)
-        logger.debug(f"Comando de velocidade: wl={wl:.3f}, wr={wr:.3f}")
+        # Aplicar velocidades nos motores
         try:
             self.sim.setJointTargetVelocity(self.l_wheel, wl)
             self.sim.setJointTargetVelocity(self.r_wheel, wr)
-        except Exception:
-            logger.exception("Falha ao aplicar velocidades nas juntas.")
+        except Exception as e:
+            logger.error(f"Erro ao aplicar velocidades nos motores: {e}")
+    
+    def stop(self):
+        """Executado após a simulação terminar - parada segura."""
+        logger.info("Parando motores e finalizando simulação...")
+        try:
+            self.sim.setJointTargetVelocity(self.l_wheel, 0)
+            self.sim.setJointTargetVelocity(self.r_wheel, 0)
+            logger.info("Simulação finalizada com sucesso")
+        except Exception as e:
+            logger.error(f"Erro ao parar motores: {e}")
         
 
 def app():
