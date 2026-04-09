@@ -1,125 +1,123 @@
-"""Utilitários e classe base para aplicações que controlam o CoppeliaSim via ZMQ.
+"""Utilities and base class for applications controlling CoppeliaSim via ZMQ.
 
-`BaseApp` gerencia o ciclo de vida comum a testes/experimentos:
-- carregar cena (.ttt)
-- configurar modo síncrono
-- executar `setup()` (uma vez)
-- iterar `loop(t)` até `sim_time` ou interrupção
+`BaseApp` manages the common lifecycle for tests/experiments:
+- Load scene (.ttt)
+- Configure synchronous mode
+- Execute `setup()` (once)
+- Iterate `loop(t)` until `sim_time` or interruption
 
-Comentários:
-- Esta camada separa a lógica de controle (nos testes) da mecânica de execução/controle
-  da simulação, facilitando testes e reuso.
+Comments:
+- This layer separates the control logic (in tests) from the simulation execution/control
+  mechanics, facilitating testing and reuse.
 """
 
 import os
-from coppeliasim_zmqremoteapi_client import RemoteAPIClient
-import keyboard
 import sys 
 import time 
 import logging
+import keyboard
+from coppeliasim_zmqremoteapi_client import RemoteAPIClient
 from coppelia_sim_framework.core.logging import setup_logger
 
 logger = setup_logger(__name__, '[MAIN]')
 
 class BaseApp:
-    """Classe base que fornece o ciclo de vida mínimo de uma aplicação de simulação.
+    """Base class providing the minimal lifecycle for a simulation application.
 
-    Subclasses devem sobrescrever `setup()` e `loop(t)` para implementar o teste.
+    Subclasses must override `setup()` and `loop(t)` to implement the test logic.
     """
     def __init__(self, scene_file=None, sim_time=10.0):
         self.scene_file = scene_file
         self.sim_time = sim_time
         
-        # Avisa o usuário ANTES do código travar
-        logger.info("Tentando conectar ao motor do CoppeliaSim...")
-        logger.info("Se o terminal travar nesta mensagem, o simulador está FECHADO. Abra o CoppeliaSim!")
+        # Warn the user BEFORE the code potentially hangs
+        logger.info("Attempting to connect to the CoppeliaSim engine...")
+        logger.info("If the terminal freezes on this message, the simulator is CLOSED. Please open CoppeliaSim!")
         
         try:
-
-            # É aqui que o código "congela" se o simulador estiver fechado
+            # The code will "freeze" here if the simulator is closed
             self.client = RemoteAPIClient()
             self.sim = self.client.require('sim')
 
-            # Parar a simulação se estiver executando
+            # Stop the simulation if it is already running
             initial_sim_state = self.sim.getSimulationState()
             if initial_sim_state != 0:
                 self.sim.stopSimulation()
                 time.sleep(1)
 
-
-            # Se passou da linha de cima, deu certo!
-            logger.info("Conectado ao simulador com sucesso!")
+            # If execution reaches this point, the connection was successful!
+            logger.info("Successfully connected to the simulator!")
             
         except Exception as e:
-            logger.error("ERRO DE CONEXÃO: Não foi possível estabelecer comunicação.")
-            logger.error(f"Detalhes: {e}")
+            logger.error("CONNECTION ERROR: Could not establish communication.")
+            logger.error(f"Details: {e}")
             sys.exit(1)
 
     def run(self):
-        """Método principal que gerencia o ciclo de vida da simulação."""
-        # Carrega a cena (se especificada)
+        """Main method that manages the simulation lifecycle."""
+        # Load the scene (if specified)
         if self.scene_file:
-            # O CoppeliaSim exige caminhos ABSOLUTOS para carregar cenas
+            # CoppeliaSim requires ABSOLUTE paths to load scenes
             scene_path = os.path.abspath(f"scenes/{self.scene_file}")
             if not os.path.exists(scene_path):
-                raise FileNotFoundError(f"Cena não encontrada: {scene_path}")
+                raise FileNotFoundError(f"Scene not found: {scene_path}")
             
-            logger.info(f"Carregando cena: {self.scene_file}...")
-            self.sim.loadScene(scene_path)   #Carregar uma cena, arquivo .ttt
+            logger.info(f"Loading scene: {self.scene_file}...")
+            self.sim.loadScene(scene_path)  # Load a .ttt scene file
 
-        # Configura modo síncrono
+        # Configure synchronous mode
         self.client.setStepping(True)
 
-        # Executa o setup específico do teste (definido pelo filho)
+        # Execute the test-specific setup (defined by the child class)
         self.setup()
 
-        # Inicia a simulação
-        logger.info("Iniciando simulação...")
+        # Start the simulation
+        logger.info("Starting simulation...")
         self.sim.startSimulation()
 
-        # Executa pós-inicialização (p.ex. captura de primeira imagem de sensor)
+        # Execute post-initialization (e.g., capturing the first sensor reading)
         self.post_start()
 
-        # Loop principal no tempo programado
+        # Main loop running for the scheduled simulation time
         try:
             while (t := self.sim.getSimulationTime()) < self.sim_time:
                 
-                # Verificação de interrupção rápida pelo usuário.
-                # Pressionar 's' interrompe a simulação imediatamente.
+                # Quick user interruption check.
+                # Pressing 's' interrupts the simulation immediately.
                 if keyboard.is_pressed('s'):
-                    logger.warning(f"Simulação interrompida pelo usuário no tempo {t:.2f}s.")
+                    logger.warning(f"Simulation interrupted by the user at time {t:.2f}s.")
                     break
                 
                 self.loop(t)
                 
-                # Avança um passo no simulador
+                # Advance one step in the simulator
                 self.client.step()
                 
         except KeyboardInterrupt:
-            logger.warning("Simulação interrompida manualmente no terminal.")
+            logger.warning("Simulation manually interrupted from the terminal.")
             
         finally:
-            # Para a simulação independentemente de erro ou sucesso
-            logger.info("Parando simulação...")
+            # Stop the simulation regardless of error or success
+            logger.info("Stopping simulation...")
 
-            self.stop() #Procedimento para quando parar a simulação
+            self.stop() # Execute custom stop procedures
             self.sim.stopSimulation()
 
     # ==========================================
-    # MÉTODOS PARA SOBRESCREVER NAS CLASSES FILHAS
+    # METHODS TO BE OVERRIDDEN IN CHILD CLASSES
     # ==========================================
     def setup(self):
-        """Executado uma vez ANTES da simulação começar (ideal para pegar handles)."""
+        """Executed once BEFORE the simulation starts (ideal for fetching handles)."""
         pass
 
     def post_start(self):
-        """Executado logo após startSimulation() (ideal para captura inicial de sensores)."""
+        """Executed right after startSimulation() (ideal for initial sensor capture)."""
         pass
 
     def loop(self, t): 
-        """Executado a cada passo da simulação (ideal para controle e sensores)."""
+        """Executed at each simulation step (ideal for control logic and reading sensors)."""
         pass
 
     def stop(self):
-        """Executado após a finalização da simulação"""
-        pass 
+        """Executed after the simulation finishes."""
+        pass

@@ -52,10 +52,8 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/coppelia-sim-framework"
-Documentation = "https://coppelia-sim-framework.readthedocs.io"
-Repository = "https://github.com/yourusername/coppelia-sim-framework.git"
-Issues = "https://github.com/yourusername/coppelia-sim-framework/issues"
+Repository = "https://github.com/SauloJose/coppelia-sim-framework.git"
+Issues = "https://github.com/SauloJose/coppelia-sim-framework/issues"
 
 [tool.setuptools]
 packages = ["coppelia_sim_framework"]

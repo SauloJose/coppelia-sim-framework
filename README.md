@@ -13,7 +13,7 @@ A comprehensive Python framework for controlling and testing robot simulations i
 
 ## Project Structure
 
-```
+```text
 coppelia_sim_framework/          # Main package
 ├── core/
 │   ├── base_app.py             # BaseApp - simulation lifecycle management
@@ -25,7 +25,7 @@ coppelia_sim_framework/          # Main package
 └── gui/                        # GUI components (future)
 
 examples/                        # Example applications
-├── locomocao_example.py        # Lissajous trajectory following
+├── locomotion_example.py       # Lissajous trajectory following
 └── obstacle_avoidance_example.py  # LIDAR obstacle avoidance
 
 tests/                          # Unit tests
@@ -69,12 +69,13 @@ pip install -r requirements.txt
 python main.py
 ```
 
-Select from the interactive menu to run available examples.
+Select from the interactive menu to run available examples. 
+* **Graceful Stop:** Press 's' during execution to stop the simulation.
+* **Emergency Stop:** Press Ctrl+C.
 
 ### Creating a New Simulation
 
 1. **Create a new file** in `examples/` (e.g., `my_robot_example.py`)
-
 2. **Inherit from BaseApp**:
 
 ```python
@@ -114,27 +115,41 @@ if __name__ == "__main__":
     app()
 ```
 
-3. **Add to menu** - The file will automatically appear in the menu!
+3. **Add to menu** - The file will automatically appear in the launcher menu.
 
 ## Core Components
 
+### Simulation Lifecycle
+
+The framework implements a standardized lifecycle for all simulations:
+1. **Connection:** Connects to CoppeliaSim via ZMQ RemoteAPI.
+2. **Scene Loading:** Loads the specified `.ttt` file.
+3. **Setup:** Executes `setup()` to get object handles, sensors, and actuators.
+4. **Post-Start:** Executes `post_start()` for tests/diagnostics after the simulation starts.
+5. **Main Loop:** Executes `loop(t)` repeatedly while `t < sim_time`.
+6. **Stop:** Executes `stop()` for cleanup and safe shutdown.
+
 ### BaseApp Class
 
-Manages the complete simulation lifecycle:
+Manages the complete simulation orchestration:
 
-```python
-class BaseApp:
-    def __init__(self, scene_file: str = None, sim_time: float = 10.0)
-    def setup(self) -> None                # Override: one-time setup
-    def post_start(self) -> None           # Override: post-simulation-start setup
-    def loop(self, t: float) -> None       # Override: control logic per step
-    def stop(self) -> None                 # Override: cleanup
-    def run(self) -> None                  # Main orchestration
-```
+| Method | Mandatory | When it runs | Description |
+|--------|-----------|--------------|-------------|
+| `setup()` | Yes | Once, before simulation starts | Get handles, initialize variables |
+| `loop(t)` | Yes | Every simulation step | Control logic and sensor reading |
+| `stop()` | No | After simulation ends | Safe motor shutdown, analysis, plotting |
+| `post_start()` | No | Right after simulation starts | Initial tests and diagnostics |
+
+**Useful Simulator Methods (`self.sim`):**
+- `getObject(path)` - Gets the handle of an object by its path.
+- `getObjectPosition(handle, ref_handle)` - Gets the object's position.
+- `getObjectOrientation(handle, ref_handle)` - Gets orientation (Euler angles).
+- `setJointTargetVelocity(handle, velocity)` - Sets joint velocity.
+- `getSimulationTimeStep()` - Gets the simulation delta time (dt).
 
 ### Professional Logging
 
-All modules use a standardized logging system:
+All modules use a standardized, emoji-free logging system for traceability:
 
 ```python
 from coppelia_sim_framework import setup_logger
@@ -162,97 +177,29 @@ trajectory_3d = np.array([[0, 0, 0], [1, 1, 0.5], [2, 0.5, 1.0]])
 Plot3D(trajectory_3d, 'X (m)', 'Y (m)', 'Z (m)', title='3D Robot Motion')
 ```
 
-Features:
-- Green circle: trajectory start point
-- Red star: trajectory end point
-- Automatic scaling and grid
+Features include a green circle for the start point, a red star for the end point, automatic scaling, and grid generation.
 
 ## Best Practices
 
 ### 1. Pre-calculate Loop-Invariant Values
-
-```python
-# GOOD:
-def setup(self):
-    self.idx_center = self.sensor_points // 2
-    
-def loop(self, t):
-    value = sensor_data[self.idx_center]
-
-# AVOID:
-def loop(self, t):
-    idx = int(len(sensor_data) / 2)  # Unnecessary calculation every step
-```
-
-**Benefit**: ~180 operations/second saved on 60 Hz loops
+Calculate static values in `setup()` rather than in `loop()`.
+**Benefit**: Saves ~180 operations/second on 60 Hz loops.
 
 ### 2. Robust Sensor Data Validation
+Always validate arrays returned by sensors before processing them to avoid scalar/empty format crashes (e.g., `if data is None or data.size == 0:`).
 
-```python
-# GOOD:
-data = np.asarray(sensor.getData())
-if data is None or data.size == 0:
-    return
-if data.ndim != 2 or data.shape[1] < 2:
-    logger.error(f"Invalid format: {data.shape}")
-    return
+### 3. Use `post_start()` for Initial Diagnostics
+Run initial tests or capture initial poses using `post_start()` instead of using unnecessary `_first_exec` flags inside your `loop()`.
 
-# AVOID:
-data = sensor.getData()
-if len(data) == 0:  # May fail if data is scalar
-    return
-```
-
-### 3. Use post_start() for Initial Diagnostics
-
-```python
-# GOOD:
-def post_start(self):
-    """Run diagnostics after simulation starts."""
-    self.initial_pose = self.sim.getObjectPosition(...)
-    
-def loop(self, t):
-    """Only control logic."""
-    pass
-
-# AVOID:
-def loop(self, t):
-    if self._first_exec:  # Unnecessary flag
-        self.initial_pose = self.sim.getObjectPosition(...)
-    self._first_exec = False
-```
-
-### 4. Separate Real vs Reference Trajectories
-
-```python
-def setup(self):
-    self.trajectory_real = []       # From simulation
-    self.trajectory_reference = []  # Desired path
-    
-def loop(self, t):
-    real_pos = self.sim.getObjectPosition(...)
-    ref_pos = self.calculate_reference(t)
-    self.trajectory_real.append(real_pos)
-    self.trajectory_reference.append(ref_pos)
-```
+### 4. Separate Real vs. Reference Trajectories
+Keep isolated lists for simulated coordinates and reference/desired coordinates to make plotting and error calculation easier.
 
 ## Examples
 
-### 1. Lissajous Trajectory Following (`locomocao_example.py`)
-
-Demonstrates:
-- Trajectory generation (Lissajous curve)
-- Differential kinematics
-- Velocity control
-- Data visualization
-
-### 2. Obstacle Avoidance (`obstacle_avoidance_example.py`)
-
-Demonstrates:
-- LIDAR sensor integration
-- Simple desviation logic
-- Real-time decision making
-- Robust error handling
+1. **Lissajous Trajectory Following (`locomotion_example.py`)**
+   - Trajectory generation, differential kinematics, velocity control, and visualization.
+2. **Obstacle Avoidance (`obstacle_avoidance_example.py`)**
+   - LIDAR sensor integration, deviation logic, and real-time decision making.
 
 ## Running Tests
 
@@ -262,59 +209,26 @@ pytest
 
 # Run with coverage
 pytest --cov=coppelia_sim_framework
-
-# Run specific test
-pytest tests/test_framework.py::TestBaseAppInitialization
 ```
-
-## Documentation
-
-- [API Reference](docs/API.md) - Complete API documentation
-- [Architecture](docs/ARCHITECTURE.md) - System design and module overview
-- [Contributing](docs/CONTRIBUTING.md) - Contribution guidelines
-- [Source Code](coppelia_sim_framework/) - Well-commented implementation
 
 ## Troubleshooting
 
-### "Program freezes at connection"
-
-CoppeliaSim is not running. Start the application first.
-
-### "Handle not found (-1 returned)"
-
-Check:
-- Object path is correct (must start with `/`)
-- Scene is loaded properly
-- Object name matches in .ttt file
-
-### "ZMQ Communication Error"
-
-Enable RemoteAPI in CoppeliaSim:
-- Menu: `Tools > Remote API server` - should be **ON**
-
-### "TypeError: len() of unsized object"
-
-Sensor returned invalid data format. Add validation:
-```python
-data = np.asarray(sensor_data)
-if data.ndim == 0 or data.size == 0:
-    logger.error(f"Invalid format: {data.shape}")
-    return
-```
+- **"Program freezes at connection":** CoppeliaSim is not running. Start the application first.
+- **"Handle not found (-1 returned)":** Ensure the object path is correct (must start with `/`), the scene is loaded properly, and the name matches the `.ttt` file.
+- **"ZMQ Communication Error":** Enable RemoteAPI in CoppeliaSim via `Tools > Remote API server` (must be ON).
+- **"TypeError: len() of unsized object":** The sensor returned an invalid data format. Ensure proper data validation with `numpy` arrays.
 
 ## Version History
 
 **v1.1.0** (Current)
-- Professional folder structure for distribution
-- Added `post_start()` lifecycle method
-- Comprehensive documentation and examples
-- Unit tests framework
-- setup.py and pyproject.toml for packaging
+- Professional folder structure for distribution and packaging (`setup.py`, `pyproject.toml`).
+- Completely revamped logging system (standardized, traceable, no emojis).
+- Added `post_start()` lifecycle method.
+- Comprehensive documentation and unit test framework.
 
 **v1.0.0**
-- Initial framework with BaseApp class
-- Professional logging system
-- Plot2D/Plot3D visualization
+- Initial framework with BaseApp class.
+- Basic plotting functionality (Plot2D/Plot3D).
 
 ## Contributing
 
@@ -326,439 +240,9 @@ if data.ndim == 0 or data.size == 0:
 
 See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for details.
 
-## License
+## License & Support
 
-MIT License - see LICENSE file for details
-
-## References
-
-- [CoppeliaSim Documentation](https://www.coppeliarobotics.com/)
-- [ZMQ Remote API](https://www.coppeliarobotics.com/helpFiles/en/zmqRemoteAPIOverview.htm)
-- [Pioneer P3DX Specs](http://www.mobilerobots.com/)
-
-## Support
-
-- 📖 Check [documentation](docs/)
-- 🐛 Report issues on GitHub
-- 💬 Ask questions in discussions
-
----
-
-**Made with ❤️ for robot simulation enthusiasts**
-
-## Como Funciona
-
-### Ciclo de Vida da Simulação
-
-O framework implementa um ciclo de vida padronizado para todas as simulações:
-
-1. **Conexão**: Conecta ao CoppeliaSim via RemoteAPI ZMQ
-2. **Carregamento de Cena**: Carrega o arquivo `.ttt` especificado
-3. **Setup**: Executa `setup()` - obtém handles de objetos, sensores e atuadores
-4. **Pós-Início**: Executa `post_start()` - testes e diagnósticos após simulação iniciar
-5. **Loop Principal**: Executa `loop(t)` repetidamente enquanto `t < sim_time`
-6. **Parada**: Executa `stop()` - finalização e limpeza
-
-### Componentes Principais
-
-#### BaseApp (core/base_app.py)
-
-Classe base que fornece toda a infraestrutura de gerenciamento da simulação:
-
-- Gerencia conexão com CoppeliaSim
-- Carrega cenas
-- Controla o ciclo de simulação
-- Permite interrupção via tecla 's'
-
-#### Utils (core/utils.py)
-
-**Sistema de Logging Profissional:**
-
-- `ProfessionalFormatter` - Formata logs com estrutura: `[NÍVEL] [ORIGEM] [TIMESTAMP] mensagem`
-- `setup_logger(name, origin_prefix)` - Cria logger padronizado para uso em qualquer arquivo
-  
-Exemplo de saída:
+- **License:** MIT License - see LICENSE file for details.
+- **Documentation:** Check the [docs/](docs/) folder.
+- **Support:** Report issues on GitHub or ask questions in discussions.
 ```
-[INFO] [MAIN] [14:32:45] Conectado ao simulador com sucesso
-[ERROR] [APP] [14:32:47] Erro ao ler sensor LIDAR
-[DEBUG] [APP] [14:32:48] LIDAR [2.45s] Esq: 1.50m | Frente: 2.30m | Dir: 1.20m
-```
-
-**Funções de Plotagem:**
-
-- `Plot2D(data, x_label, y_label, tamanho_janela, limite_x, limite_y, title)` - Gráficos 2D com XY
-- `Plot3D(data, x_label, y_label, z_label, tamanho_janela, limite_x, limite_y, limite_z, title)` - Gráficos 3D com XYZ
-
-Ambas marcam ponto inicial (verde) e final (vermelho) da trajetória.
-
-## Criando uma Nova Simulação
-
-### Passo 1: Criar a Classe
-
-Crie um arquivo em `apps/` que herde de `BaseApp`:
-
-```python
-from core.base_app import BaseApp
-from core.utils import setup_logger
-import numpy as np
-
-logger = setup_logger(__name__, '[APP]')
-
-class MinhaSimulacao(BaseApp):
-    """Descrição do teste/simulação."""
-    
-    def __init__(self):
-        # Especificar cena e tempo de simulação
-        super().__init__(scene_file="minha_cena.ttt", sim_time=30.0)
-        # Outras inicializações aqui
-    
-    def setup(self):
-        """Executado UMA VEZ antes da simulação começar."""
-        pass
-    
-    def post_start(self):
-        """Executado após startSimulation() - testes/diagnósticos (opcional)."""
-        pass
-    
-    def loop(self, t):
-        """Executado a cada passo da simulação."""
-        pass
-    
-    def stop(self):
-        """Executado após a simulação terminar (opcional)."""
-        pass
-```
-
-### Passo 2: Implementar os Métodos
-
-#### setup()
-
-**Obrigação**: Obter um handle para cada objeto da cena que será manipulado.
-
-```python
-def setup(self):
-    logger.info("Configurando simulação...")
-    
-    # Obtém handle do robô
-    self.robot_handle = self.sim.getObject('/Pioneer_p3dx')
-    
-    # Obtém handles dos motores
-    self.left_motor = self.sim.getObject('/Pioneer_p3dx/Pioneer_p3dx_leftMotor')
-    self.right_motor = self.sim.getObject('/Pioneer_p3dx/Pioneer_p3dx_rightMotor')
-    
-    # Valida handles
-    if self.robot_handle == -1:
-        logger.error("Robot não encontrado na cena!")
-        raise RuntimeError("Robot não encontrado na cena!")
-    
-    logger.debug(f"Handles obtidos: robot={self.robot_handle}")
-    
-    # Inicializa dados
-    self.position = np.array([0, 0, 0])
-    self.trajectory = []
-```
-
-Métodos úteis do simulador (`self.sim`):
-
-- `getObject(path)` - Obtém handle de um objeto por caminho
-- `getObjectPosition(handle, ref_handle)` - Posição do objeto
-- `getObjectOrientation(handle, ref_handle)` - Orientação (ângulos de Euler)
-- `setJointTargetVelocity(handle, velocity)` - Define velocidade de junta
-- `getSimulationTimeStep()` - Obtém dt de simulação
-
-#### loop(t)
-
-**Executado a cada passo de simulação**. Implementar controle e leitura de sensores.
-
-```python
-def loop(self, t):
-    # Ler sensores
-    position = self.sim.getObjectPosition(self.robot_handle, self.sim.handle_world)
-    
-    # Guardar histórico
-    self.trajectory.append(position)
-    
-    # Controle (ex: velocidade constante)
-    self.sim.setJointTargetVelocity(self.left_motor, 0.5)
-    self.sim.setJointTargetVelocity(self.right_motor, 0.5)
-    
-    # Log opcional
-    if t % 1.0 < 0.01:  # A cada ~1 segundo
-        logger.debug(f"Tempo: {t:.2f}s, Posição: {position}")
-```
-
-#### stop()
-
-Executado após a simulação terminar. Ideal para parada segura e análise final.
-
-```python
-def stop(self):
-    logger.info("Finalizando simulação...")
-    
-    # Parar motores (IMPORTANTE para segurança)
-    try:
-        self.sim.setJointTargetVelocity(self.left_motor, 0)
-        self.sim.setJointTargetVelocity(self.right_motor, 0)
-        logger.info("Motores parados com sucesso")
-    except Exception as e:
-        logger.error(f"Erro ao parar motores: {e}")
-    
-    # Análise e plotagem (com Plot2D padrão)
-    from core.utils import Plot2D
-    Plot2D(self.trajectory, 'X (m)', 'Y (m)', 
-           tamanho_janela=(10, 8),
-           title="Trajetória do Robô")
-```
-
-#### post_start() (Opcional)
-
-Executado logo após `startSimulation()` e ANTES do loop principal. Útil para diagnósticos rápidos e captura de dados iniciais.
-
-```python
-def post_start(self):
-    """Testes iniciais que requerem simulação já em execução."""
-    logger.info("Executando diagnóstico inicial...")
-    
-    # Enviar pulso de teste
-    self.sim.setJointTargetVelocity(self.left_motor, 0.1)
-    time.sleep(0.1)
-    self.sim.setJointTargetVelocity(self.left_motor, 0)
-    
-    logger.debug("Diagnóstico concluído com sucesso")
-```
-
-### Passo 3: Sistema de Logging Profissional
-
-O framework usa um sistema de logging padronizado sem emojis. Cada arquivo deve importar seu logger assim:
-
-```python
-from core.utils import setup_logger
-
-# Em main.py:
-logger = setup_logger(__name__, '[MAIN]')
-
-# Em apps/minha_simulacao.py:
-logger = setup_logger(__name__, '[APP]')
-```
-
-**Saída gerada:**
-```
-[INFO] [MAIN] [14:32:45] Conectado ao simulador com sucesso
-[ERROR] [APP] [14:32:47] Erro ao ler sensor LIDAR
-[DEBUG] [APP] [14:32:48] LIDAR [2.45s] Esq: 1.50m | Frente: 2.30m
-```
-
-**Níveis de Log:**
-- `logger.debug(msg)` - Detalhes técnicos (desabilitado em produção)
-- `logger.info(msg)` - Informações importantes
-- `logger.warning(msg)` - Avisos (situação anômala mas segura)
-- `logger.error(msg)` - Erros recuperáveis
-- `logger.critical(msg)` - Falhas críticas
-
-### Passo 4: Criar o Ponto de Entrada
-
-No final do arquivo, crie a função `app()`:
-
-```python
-def app():
-    """Ponto de entrada esperado por main.py."""
-    simulation = MinhaSimulacao()
-    simulation.run()
-```
-
-### Passo 5: Executar
-
-No `main.py`, importe e execute:
-
-```python
-from apps.minha_simulacao import app
-
-if __name__ == "__main__":
-    app()
-```
-
-Ou execute diretamente:
-
-```bash
-python main.py
-```
-
-## Métodos Obrigatórios e Opcionais
-
-| Método | Obrigatório | Quando Executado | Descrição |
-|--------|-----------|------------------|-----------|
-| `setup()` | Sim | Uma vez, antes da simulação | Obter handles, inicializar variáveis |
-| `loop(t)` | Sim | A cada passo da simulação | Controle e leitura de sensores |
-| `stop()` | Não | Após a simulação terminar | Parada segura, análise, plotagem |
-| `post_start()` | Não | Logo após iniciar simulação | Testes e diagnósticos |
-
-## Exemplo Completo
-
-Veja [apps/locomocao.py](apps/locomocao.py) para um exemplo funcional de simulação com:
-
-- Obtenção de handles
-- Cinemática (Pioneer P3DX)
-- Acúmulo de trajetória
-- Plotagem de resultados
-
-## Instalação e Execução
-
-### Requisitos
-
-- Python 3.8+
-- CoppeliaSim (versão 4.4.0 ou posterior)
-- Dependências listadas em `requirements.txt`
-
-### Setup
-
-```bash
-# Instalar dependências
-pip install -r requirements.txt
-
-# Executar simulação
-python main.py
-```
-
-### Interrupção
-
-- Pressionar 's' durante execução: interrompe a simulação
-- Ctrl+C: interrupção de emergência
-
-## Otimizações e Boas Práticas
-
-### Sistema de Logging
-
-O projeto usa `ProfessionalFormatter` e `setup_logger()` para garantir:
-- Logs consistentes e profissionais (sem emojis)
-- Identificação clara de origem (`[MAIN]` vs `[APP]`)
-- Timestamps para debug temporal
-- Facilita análise de problemas
-
-### Funções de Plotagem
-
-Use `Plot2D()` e `Plot3D()` em vez de matplotlib direto:
-```python
-# BOA PRATICA:
-from core.utils import Plot2D
-Plot2D(trajectory, 'X (m)', 'Y (m)', title="Minha Trajetória")
-
-# EVITAR:
-import matplotlib.pyplot as plt
-plt.plot(...)  # Sem padrão
-```
-
-**Ganhos:** Interface consistente, código limpo, manutenção facilitada
-
-### Pré-cálculo de Constantes
-
-Em simulações com loop rápido (60+ ciclos/s), pré-calcule valores em `setup()`:
-
-```python
-def setup(self):
-    # BOM: Calcular UMA VEZ
-    self.idx_frente = self.n_pontos // 2
-    self.idx_esq = (3 * self.n_pontos) // 4
-    
-def loop(self, t):
-    # USAR no loop
-    valor = dados[self.idx_frente]
-
-# EVITAR: Calcular a cada loop
-def loop(self, t):
-    idx = int(len(dados) / 2)  # Operação matemática desnecessária
-```
-
-**Ganho:** Reduz operações em ~180 ops/s para loops de 60 Hz
-
-### Validação Robusta de Dados
-
-Sempre valide dados de sensores:
-
-```python
-# BOM:
-data = np.asarray(sensor.getData())
-if data is None or data.size == 0:
-    return
-if data.ndim != 2 or data.shape[1] < 2:
-    logger.error(f"Formato inválido: {data.shape}")
-    return
-
-# EVITAR:
-data = sensor.getData()
-if len(data) == 0:  # Pode falhar se data for escalar
-    return
-```
-
-### Separação de Responsabilidades
-
-Use `post_start()` para inicializações que requerem simulação em execução:
-
-```python
-# BOM:
-def post_start(self):
-    """Captura dados iniciais do sensor"""
-    sensor_data = self.sensor.getData()
-    
-def loop(self, t):
-    """Apenas lógica de controle"""
-    
-# EVITAR:
-def loop(self, t):
-    if self._first_exec:
-        sensor_data = self.sensor.getData()  # Flag desnecessária
-    self._first_exec = False
-```
-
-## Troubleshooting
-
-### "Código congela ao conectar"
-
-O CoppeliaSim está fechado. Abra a aplicação antes de executar.
-
-### "Handle não encontrado (retorna -1)"
-
-Verifique:
-1. O caminho do objeto no CoppeliaSim (deve começar com `/`)
-2. A cena está carregada corretamente
-3. O nome do objeto/robô no arquivo `.ttt`
-
-### "Erro de comunicação ZMQ"
-
-Verifique se a RemoteAPI está ativada no CoppeliaSim:
-- Menu: `Tools > Remote API server` deve estar **ligado**
-
-### "TypeError: len() of unsized object"
-
-Sensor retornou dados em formato inválido. Verifique:
-1. Sensor conectado corretamente no CoppeliaSim
-2. Validações em `loop()` tratam dados escalar/vazio
-3. Logs indicam `shape_do_sensor` esperado
-
-## Histórico de Melhorias
-
-### v1.1 - Sistema de Logging Profissional
-- Removidos todos os emojis
-- Criado `ProfessionalFormatter` com estrutura padronizada
-- Função `setup_logger()` para uso consistente
-- Logs rastreáveis com timestamp e origem
-
-### v1.0 - Framework Base
-- Classe `BaseApp` com ciclo de vida completo
-- Métodos `setup()`, `loop(t)`, `stop()`, `post_start()`
-- Conexão RemoteAPI com CoppeliaSim
-- Funções `Plot2D()` e `Plot3D()` reutilizáveis
-
-## Contribuições
-
-Para adicionar novas simulações:
-
-1. Crie arquivo em `apps/seu_teste.py`
-2. Herde de `BaseApp`
-3. Implemente `setup()` e `loop(t)`
-4. Use `setup_logger()` para logging
-5. Adicione função `app()` como ponto de entrada
-6. Teste com `python main.py`
-
-Mantenha a estrutura do projeto organizada e siga o padrão de logging profissional.
-
-
