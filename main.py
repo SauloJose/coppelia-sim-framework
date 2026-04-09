@@ -1,101 +1,108 @@
-"""Painel interativo para listar e executar testes na pasta `apps`.
+"""Interactive panel to list and run examples from the `examples` folder.
 
-Expectativa:
-- Cada arquivo em `apps/` deve expor uma função `app()` que instancia e executa o teste.
+Expected Structure:
+- Each file in `examples/` should expose an `app()` function that instantiates and runs the test.
 
-Uso:
-- Rode este arquivo com `python main.py` e selecione um teste pelo número.
+Usage:
+- Run this file with `python main.py` and select an example by number.
 """
 import importlib
+import sys
 from pathlib import Path
-from core.utils import setup_logger
+from coppelia_sim_framework import setup_logger
 
 logger = setup_logger(__name__, '[MAIN]')
 
-def listar_testes():
-    """Lê a pasta 'apps' e retorna uma lista com o nome dos arquivos de teste."""
-    pasta_apps = Path("apps")
-    testes = []
+
+def list_examples():
+    """Reads the 'examples' folder and returns a list of example filenames."""
+    examples_folder = Path("examples")
+    examples = []
     
-    # Verifica se a pasta existe antes de tentar ler
-    if not pasta_apps.exists() or not pasta_apps.is_dir():
-        logger.warning("Aviso: A pasta 'apps' não foi encontrada.")
-        return testes
+    # Check if the folder exists before trying to read it
+    if not examples_folder.exists() or not examples_folder.is_dir():
+        logger.warning("Warning: The 'examples' folder was not found.")
+        return examples
         
-    # Procura todos os arquivos que terminam com .py na pasta apps
-    for arquivo in pasta_apps.glob("*.py"):
-        nome_arquivo = arquivo.stem  # Pega só o nome (ignora o .py)
+    # Search for all .py files in the examples folder
+    for file in examples_folder.glob("*.py"):
+        file_name = file.stem  # Gets only the name (ignores .py)
         
-        # Ignora o __init__.py e arquivos ocultos
-        if nome_arquivo != "__init__" and not nome_arquivo.startswith("."):
-            testes.append(nome_arquivo)
+        # Ignores __init__.py and hidden files
+        if file_name != "__init__" and not file_name.startswith("."):
+            examples.append(file_name)
             
-    # Retorna em ordem alfabética para o menu ficar organizado
-    return sorted(testes)
+    # Returns in alphabetical order for an organized menu
+    return sorted(examples)
+
 
 def main():
-    """Loop interativo principal.
+    """Main interactive loop.
 
-    - Lista módulos em `apps/` (arquivos .py, exceto __init__).
-    - Apresenta menu e importa dinamicamente o módulo escolhido.
-    - Procura uma função `app()` no módulo para executar o teste.
+    - Lists modules in `examples/` (Python files, except __init__).
+    - Presents menu and dynamically imports the chosen module.
+    - Looks for an `app()` function in the module to run the example.
     """
 
-    # 1. Lê a pasta dinamicamente
-    lista_testes = listar_testes()
+    # 1. Dynamically reads the folder
+    examples_list = list_examples()
     
-    if not lista_testes:
-        logger.error("Nenhum teste encontrado na pasta 'apps/'.")
+    if not examples_list:
+        logger.error("No examples found in the 'examples/' folder.")
         return
 
-    # 2. Monta o Menu
-    print("\n" + "="*40)
-    print(" MENU DO SIMULADOR COPPELIASIM ")
-    print("="*40)
-    print("Selecione o teste que deseja executar:\n")
+    # 2. Builds the Menu
+    print("\n" + "="*50)
+    print(" COPPELIASIM FRAMEWORK - EXAMPLES MENU")
+    print("="*50)
+    print("Select the example you want to run:\n")
     
-    for i, nome_teste in enumerate(lista_testes):
-        print(f"[{i + 1}] - {nome_teste}")
+    for i, example_name in enumerate(examples_list):
+        print(f"[{i + 1}] - {example_name}")
         
-    print("[0] - Sair")
-    print("-" * 40)
+    print("[0] - Exit")
+    print("-" * 50)
     
-    # 3. Loop de interação
+    # 3. Interaction loop
     while True:
-        escolha = input("Digite o número da opção: ")
+        choice = input("Enter the option number: ")
         
-        if escolha == '0':
-            print("Encerrando o painel. Até logo!")
+        if choice == '0':
+            logger.info("Exiting the panel. See you later!")
             break
             
-        if escolha.isdigit():
-            indice = int(escolha) - 1
+        if choice.isdigit():
+            index = int(choice) - 1
             
-            if 0 <= indice < len(lista_testes):
-                nome_selecionado = lista_testes[indice]
-                logger.info(f"Iniciando o teste: {nome_selecionado}")  
+            if 0 <= index < len(examples_list):
+                selected_name = examples_list[index]
+                logger.info(f"Starting example: {selected_name}")  
                 
-                # 4. Importação e Execução Dinâmica
+                # 4. Dynamic Import and Execution
                 try:
-                    # Importa o módulo escolhido (Ex: from apps import teste_cinematica)
-                    modulo = importlib.import_module(f"apps.{nome_selecionado}")
+                    # Imports the chosen module (Ex: from examples import locomocao_example)
+                    module = importlib.import_module(f"examples.{selected_name}")
                     
-                    # Verifica se você realmente criou a função 'app()' dentro do arquivo
-                    if hasattr(modulo, 'app'):
-                        modulo.app()
+                    # Checks if you really created the 'app()' function inside the file
+                    if hasattr(module, 'app'):
+                        module.app()
                     else:
-                        logger.error(f"Arquivo '{nome_selecionado}.py' não possui função 'app()'")
+                        logger.error(f"File '{selected_name}.py' does not have an 'app()' function")
                         
                 except ImportError as e:
-                    logger.error(f"Erro ao tentar carregar o teste '{nome_selecionado}': {e}")
+                    logger.error(f"Error loading example '{selected_name}': {e}")
                 except Exception as e:
-                    logger.error(f"Erro crítico ao executar o teste '{nome_selecionado}': {type(e).__name__}: {e}")
+                    logger.error(f"Critical error running example '{selected_name}': {type(e).__name__}: {e}")
                     
-                break # Encerra o menu após rodar o teste
+                break  # Exits the menu after running the example
             else:
-                logger.error("Número fora da lista. Tente novamente.")
+                logger.error("Number out of range. Try again.")
         else:
-            logger.error("Por favor, digite apenas números válidos.")
+            logger.error("Please enter only valid numbers.")
+
+
+if __name__ == '__main__':
+    main()
 
 if __name__ == '__main__':
     main()

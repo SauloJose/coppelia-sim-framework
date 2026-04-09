@@ -1,0 +1,80 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "coppelia-sim-framework"
+version = "1.1.0"
+description = "Professional Python framework for CoppeliaSim robot simulations"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+keywords = ["coppeliasim", "robot", "simulation", "framework", "python"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+    "coppeliasim-zmqremoteapi-client",
+    "numpy",
+    "matplotlib",
+    "keyboard",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov",
+    "black",
+    "flake8",
+    "mypy",
+    "sphinx",
+    "sphinx-rtd-theme",
+    "wheel",
+    "build",
+]
+
+docs = [
+    "sphinx",
+    "sphinx-rtd-theme",
+    "sphinx-autodoc-typehints",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/coppelia-sim-framework"
+Documentation = "https://coppelia-sim-framework.readthedocs.io"
+Repository = "https://github.com/yourusername/coppelia-sim-framework.git"
+Issues = "https://github.com/yourusername/coppelia-sim-framework/issues"
+
+[tool.setuptools]
+packages = ["coppelia_sim_framework"]
+
+[tool.setuptools.package-data]
+coppelia_sim_framework = ["py.typed"]
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311']
+include = '\.pyi?$'
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "--cov=coppelia_sim_framework --cov-report=html --cov-report=term-missing"
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false

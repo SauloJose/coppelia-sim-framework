@@ -1,0 +1,26 @@
+# Core dependencies
+coppeliasim-zmqremoteapi-client
+numpy
+matplotlib
+keyboard
+
+# Development dependencies
+pytest>=7.0
+pytest-cov
+black
+flake8
+mypy
+
+# Documentation dependencies
+sphinx
+sphinx-rtd-theme
+sphinx-autodoc-typehints
+
+# Build dependencies
+wheel
+build
+twine
+
+# Format and lint
+isort
+pylint

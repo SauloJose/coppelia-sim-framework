@@ -1,32 +1,350 @@
-# Curso CoppeliaSim - Framework de Simulação de Robôs
+# CoppeliaSim Framework - Professional Robot Simulation
 
-Este projeto fornece um framework para controlar e testar simulações de robôs no CoppeliaSim através da API RemoteAPI via ZMQ.
+A comprehensive Python framework for controlling and testing robot simulations in CoppeliaSim using the RemoteAPI ZMQ interface.
 
-## Estrutura do Projeto
+## Features
+
+✨ **Professional Logging System** - Standardized, emoji-free logging without compromises  
+🎯 **BaseApp Architecture** - Complete simulation lifecycle management  
+📊 **Built-in Visualization** - Plot2D/Plot3D standardized plotting functions  
+🔧 **DRY Principles** - Reduced code duplication and improved maintainability  
+🚀 **Production Ready** - Proper packaging with setup.py, pyproject.toml, and tests  
+📚 **Well Documented** - Comprehensive docstrings and example implementations
+
+## Project Structure
 
 ```
-.
-├── apps/                    # Aplicações e testes específicos
-│   ├── locomocao.py        # Exemplo: teste de locomoção do Pioneer P3DX
-│   ├── PionerHouse.py      # Teste em ambiente tipo casa
-│   └── teste.py            # Testes gerais
-├── core/                    # Núcleo do framework
-│   ├── base_app.py         # Classe base para todas as simulações
-│   ├── utils.py            # Funções utilitárias (plotagem, etc)
-│   └── gui/
-│       └── interface.py    # Interface gráfica (opcional)
-├── robots/                 # Modelos e definições de robôs
-│   ├── bots/              # Comportamentos/drivers de robôs
-│   └── sensors/           # Implementação de sensores
-│       └── HokuyoSensor.py # Sensor Hokuyo
-├── scenes/                 # Arquivos de cena CoppeliaSim (.ttt)
-│   ├── house.ttt
-│   ├── labirinto.ttt
-│   └── locomocao.ttt
-├── config.json            # Configurações do projeto
-├── requirements.txt       # Dependências Python
-└── main.py               # Ponto de entrada principal
+coppelia_sim_framework/          # Main package
+├── core/
+│   ├── base_app.py             # BaseApp - simulation lifecycle management
+│   └── logging.py              # Professional logging system
+├── utils/
+│   └── plotting.py             # Plot2D() and Plot3D() visualization
+├── sensors/                    # Sensor implementations (extensible)
+├── robots/                     # Robot models (extensible)
+└── gui/                        # GUI components (future)
+
+examples/                        # Example applications
+├── locomocao_example.py        # Lissajous trajectory following
+└── obstacle_avoidance_example.py  # LIDAR obstacle avoidance
+
+tests/                          # Unit tests
+docs/                           # Documentation
+config/                         # Configuration files
+scripts/                        # Utility scripts
+
+main.py                         # Interactive menu launcher
+setup.py                        # Package installation
+pyproject.toml                  # Project metadata
+requirements-dev.txt            # Development dependencies
+.gitignore                      # Git ignore rules
 ```
+
+## Installation
+
+### Requirements
+
+- Python 3.8+
+- CoppeliaSim 4.4.0 or later
+- ZMQ Remote API enabled in CoppeliaSim
+
+### Setup
+
+```bash
+# Using pip
+pip install -e .
+
+# Or with development dependencies
+pip install -e ".[dev]"
+
+# Or using requirements
+pip install -r requirements.txt
+```
+
+## Quick Start
+
+### Running an Example
+
+```bash
+python main.py
+```
+
+Select from the interactive menu to run available examples.
+
+### Creating a New Simulation
+
+1. **Create a new file** in `examples/` (e.g., `my_robot_example.py`)
+
+2. **Inherit from BaseApp**:
+
+```python
+from coppelia_sim_framework import BaseApp, setup_logger
+
+logger = setup_logger(__name__, '[APP]')
+
+class MyRobotSimulation(BaseApp):
+    def __init__(self):
+        super().__init__(scene_file="my_scene.ttt", sim_time=30.0)
+    
+    def setup(self):
+        """Called once before simulation starts."""
+        logger.info("Setting up robot...")
+        self.robot_handle = self.sim.getObject('/MyRobot')
+        self.left_motor = self.sim.getObject('/MyRobot/leftMotor')
+        self.right_motor = self.sim.getObject('/MyRobot/rightMotor')
+    
+    def loop(self, t):
+        """Called at each simulation step."""
+        # Control logic here
+        self.sim.setJointTargetVelocity(self.left_motor, 0.5)
+        self.sim.setJointTargetVelocity(self.right_motor, 0.5)
+    
+    def stop(self):
+        """Called after simulation ends."""
+        logger.info("Stopping motors...")
+        self.sim.setJointTargetVelocity(self.left_motor, 0)
+        self.sim.setJointTargetVelocity(self.right_motor, 0)
+
+def app():
+    """Entry point for main.py menu."""
+    sim = MyRobotSimulation()
+    sim.run()
+
+if __name__ == "__main__":
+    app()
+```
+
+3. **Add to menu** - The file will automatically appear in the menu!
+
+## Core Components
+
+### BaseApp Class
+
+Manages the complete simulation lifecycle:
+
+```python
+class BaseApp:
+    def __init__(self, scene_file: str = None, sim_time: float = 10.0)
+    def setup(self) -> None                # Override: one-time setup
+    def post_start(self) -> None           # Override: post-simulation-start setup
+    def loop(self, t: float) -> None       # Override: control logic per step
+    def stop(self) -> None                 # Override: cleanup
+    def run(self) -> None                  # Main orchestration
+```
+
+### Professional Logging
+
+All modules use a standardized logging system:
+
+```python
+from coppelia_sim_framework import setup_logger
+
+logger = setup_logger(__name__, '[APP]')
+
+logger.info("Starting...")    # [INFO] [APP] [14:32:45] Starting...
+logger.error("Failed...")     # [ERROR] [APP] [14:32:47] Failed...
+```
+
+**Format**: `[LEVEL] [ORIGIN] [HH:MM:SS] message`
+
+### Visualization Functions
+
+```python
+from coppelia_sim_framework import Plot2D, Plot3D
+import numpy as np
+
+# 2D trajectory plot
+trajectory = np.array([[0, 0], [1, 1], [2, 0.5]])
+Plot2D(trajectory, 'X (m)', 'Y (m)', title='Robot Path')
+
+# 3D trajectory plot  
+trajectory_3d = np.array([[0, 0, 0], [1, 1, 0.5], [2, 0.5, 1.0]])
+Plot3D(trajectory_3d, 'X (m)', 'Y (m)', 'Z (m)', title='3D Robot Motion')
+```
+
+Features:
+- Green circle: trajectory start point
+- Red star: trajectory end point
+- Automatic scaling and grid
+
+## Best Practices
+
+### 1. Pre-calculate Loop-Invariant Values
+
+```python
+# GOOD:
+def setup(self):
+    self.idx_center = self.sensor_points // 2
+    
+def loop(self, t):
+    value = sensor_data[self.idx_center]
+
+# AVOID:
+def loop(self, t):
+    idx = int(len(sensor_data) / 2)  # Unnecessary calculation every step
+```
+
+**Benefit**: ~180 operations/second saved on 60 Hz loops
+
+### 2. Robust Sensor Data Validation
+
+```python
+# GOOD:
+data = np.asarray(sensor.getData())
+if data is None or data.size == 0:
+    return
+if data.ndim != 2 or data.shape[1] < 2:
+    logger.error(f"Invalid format: {data.shape}")
+    return
+
+# AVOID:
+data = sensor.getData()
+if len(data) == 0:  # May fail if data is scalar
+    return
+```
+
+### 3. Use post_start() for Initial Diagnostics
+
+```python
+# GOOD:
+def post_start(self):
+    """Run diagnostics after simulation starts."""
+    self.initial_pose = self.sim.getObjectPosition(...)
+    
+def loop(self, t):
+    """Only control logic."""
+    pass
+
+# AVOID:
+def loop(self, t):
+    if self._first_exec:  # Unnecessary flag
+        self.initial_pose = self.sim.getObjectPosition(...)
+    self._first_exec = False
+```
+
+### 4. Separate Real vs Reference Trajectories
+
+```python
+def setup(self):
+    self.trajectory_real = []       # From simulation
+    self.trajectory_reference = []  # Desired path
+    
+def loop(self, t):
+    real_pos = self.sim.getObjectPosition(...)
+    ref_pos = self.calculate_reference(t)
+    self.trajectory_real.append(real_pos)
+    self.trajectory_reference.append(ref_pos)
+```
+
+## Examples
+
+### 1. Lissajous Trajectory Following (`locomocao_example.py`)
+
+Demonstrates:
+- Trajectory generation (Lissajous curve)
+- Differential kinematics
+- Velocity control
+- Data visualization
+
+### 2. Obstacle Avoidance (`obstacle_avoidance_example.py`)
+
+Demonstrates:
+- LIDAR sensor integration
+- Simple desviation logic
+- Real-time decision making
+- Robust error handling
+
+## Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=coppelia_sim_framework
+
+# Run specific test
+pytest tests/test_framework.py::TestBaseAppInitialization
+```
+
+## Documentation
+
+- [API Reference](docs/API.md) - Complete API documentation
+- [Architecture](docs/ARCHITECTURE.md) - System design and module overview
+- [Contributing](docs/CONTRIBUTING.md) - Contribution guidelines
+- [Source Code](coppelia_sim_framework/) - Well-commented implementation
+
+## Troubleshooting
+
+### "Program freezes at connection"
+
+CoppeliaSim is not running. Start the application first.
+
+### "Handle not found (-1 returned)"
+
+Check:
+- Object path is correct (must start with `/`)
+- Scene is loaded properly
+- Object name matches in .ttt file
+
+### "ZMQ Communication Error"
+
+Enable RemoteAPI in CoppeliaSim:
+- Menu: `Tools > Remote API server` - should be **ON**
+
+### "TypeError: len() of unsized object"
+
+Sensor returned invalid data format. Add validation:
+```python
+data = np.asarray(sensor_data)
+if data.ndim == 0 or data.size == 0:
+    logger.error(f"Invalid format: {data.shape}")
+    return
+```
+
+## Version History
+
+**v1.1.0** (Current)
+- Professional folder structure for distribution
+- Added `post_start()` lifecycle method
+- Comprehensive documentation and examples
+- Unit tests framework
+- setup.py and pyproject.toml for packaging
+
+**v1.0.0**
+- Initial framework with BaseApp class
+- Professional logging system
+- Plot2D/Plot3D visualization
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Follow the code style guidelines
+4. Add tests for new features
+5. Submit a pull request
+
+See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for details.
+
+## License
+
+MIT License - see LICENSE file for details
+
+## References
+
+- [CoppeliaSim Documentation](https://www.coppeliarobotics.com/)
+- [ZMQ Remote API](https://www.coppeliarobotics.com/helpFiles/en/zmqRemoteAPIOverview.htm)
+- [Pioneer P3DX Specs](http://www.mobilerobots.com/)
+
+## Support
+
+- 📖 Check [documentation](docs/)
+- 🐛 Report issues on GitHub
+- 💬 Ask questions in discussions
+
+---
+
+**Made with ❤️ for robot simulation enthusiasts**
 
 ## Como Funciona
 
