@@ -37,7 +37,7 @@ class brainGUI:
         ]
         max_title_len = max(len(line) for line in title_lines)
         
-        subtitle = "Robotics Infrastructure Manager  |  Script Organization & LLMs  |  Windows/Linux"
+        subtitle = "Robotics  Manager  |  Script Organization & LLMs  |  Windows/Linux"
         line_char = "─"
         decor_len = min(max_title_len, term_width - 4)
         left_margin = max(0, (term_width - max_title_len) // 2)
@@ -191,7 +191,7 @@ class brainGUI:
         idx = self._menu_navegavel(
             "INICIAR SIMULAÇÃO",
             opcoes,
-            msg_raposa="Escolha um exemplo para executar:",
+            msg_raposa="Escolha um exemplo para executar.",
             subtitulo=f"{len(self.examples_list)} exemplos disponíveis"
         )
         if idx is None or idx == -1 or idx == len(self.examples_list):
@@ -200,7 +200,15 @@ class brainGUI:
         self.logger.info(f"Iniciando exemplo: {selected}")
         try:
             module = importlib.import_module(f"examples.{selected}")
+
+            # --- MODIFICAÇÃO AQUI ---
+            # Limpa a tela para apagar o menu anterior
+            os.system('cls' if os.name == 'nt' else 'clear')
+            # Exibe o banner no topo
+            self.banner()
+            
             if hasattr(module, 'app'):
+                fox_print(f"O exemplo '{selected}' foi iniciado. Para pausar ou cancelar clique em 'ctrl+c' ou 's'. ", width=40)
                 module.app()
             else:
                 fox_print(f"O exemplo '{selected}' não tem função 'app()'.", width=40)

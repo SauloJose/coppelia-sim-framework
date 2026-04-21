@@ -5,6 +5,12 @@ import shutil
 import importlib
 import textwrap
 
+# Cores ANSI
+ORANGE = "\033[38;5;208m"
+BLACK = "\033[30m"
+BOLD = "\033[1m"
+RESET = "\033[0m"
+
 def get_key():
     """Captura uma tecla pressionada de forma cross-platform."""
     if os.name == 'nt':
@@ -51,35 +57,39 @@ def get_key():
 
 # ---------- Arte da Raposa ----------
 FOX_ART = r"""
-  ██████
-██████████
-██▓▓██▓▓██
-██████████
-  ██  ██
+    █    █  
+   ██    ██
+  ██████████
+████  ██  ████
+   ████████
+     ████
 """
 
-# Balão de fala formatado
-def fox_say(message, width=60):
-    """Retorna a raposa com um balão de fala contendo a mensagem."""
+def fox_say(message, width=50):
+    """Retorna a raposa com um balão de fala elegante e colorido."""
     lines = textwrap.wrap(message, width)
     max_len = max(len(line) for line in lines) if lines else 0
-    balloon_top = "   " + "_" * (max_len + 2)
-    balloon_bottom = "   " + "-" * (max_len + 2)
     
-    result = [balloon_top]
-    for i, line in enumerate(lines):
-        if len(lines) == 1:
-            result.append(f"  < {line.ljust(max_len)} >")
-        elif i == 0:
-            result.append(f"  / {line.ljust(max_len)} \\")
-        elif i == len(lines) - 1:
-            result.append(f"  \\ {line.ljust(max_len)} /")
-        else:
-            result.append(f"  | {line.ljust(max_len)} |")
-    result.append(balloon_bottom)
-    result.append(FOX_ART)
+    # Construção do balão com bordas arredondadas (Unicode)
+    top =    "  ╭" + "─" * (max_len + 2) + "╮"
+    bottom = "  ╰" + "─" * (max_len + 2) + "╯"
+    pointer = "   " + " " * (max_len // 4) + "▼"
+    
+    result = [f"{BOLD}{top}{RESET}"]
+    
+    for line in lines:
+        content = line.ljust(max_len)
+        result.append(f"{BOLD}  │ {RESET}{content}{BOLD} │{RESET}")
+    
+    result.append(f"{BOLD}{bottom}{RESET}")
+    result.append(pointer)
+    result.append(f"{ORANGE}{FOX_ART}{RESET}")
+    
     return "\n".join(result)
 
-def fox_print(message, width=60):
+def fox_print(message, width=50):
     """Imprime a raposa falando a mensagem."""
+    # Garante que as cores funcionem no Windows (se for o caso)
+    if os.name == 'nt':
+        os.system('color')
     print(fox_say(message, width))
