@@ -18,10 +18,12 @@ import tempfile
 import subprocess
 import platform
 import shutil
-import logging
 import keyboard
 from coppeliasim_zmqremoteapi_client import RemoteAPIClient
-from brainbyte.core.logging import *
+from brainbyte.sensors import *
+from brainbyte.robots import * 
+from brainbyte.utils.logging import setup_logger
+from brainbyte.utils import *
 
     
 class BaseApp:
@@ -42,7 +44,7 @@ class BaseApp:
             self._temp_log_file = None
 
         # Warn the user BEFORE the code potentially hangs
-        self.logger = setup_logger(__name__, '[MAIN]', log_file=log_file)
+        self.logger = setup_logger(__name__, '[MAIN]', log_file=LOG_APP_FILE)
         self.log_file = log_file
         
         self.logger.info("Attempting to connect to CoppeliaSim engine...")

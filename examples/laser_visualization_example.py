@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import traceback
 import logging
 
-from brainbyte import BaseApp, setup_logger
+from brainbyte import BaseApp
 from brainbyte.sensors import HokuyoSensorSim
 
 

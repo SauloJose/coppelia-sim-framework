@@ -7,11 +7,13 @@ Exemplo de uso do framework CoppeliaSim que demonstra:
 - Validação robusta de dados de sensor
 """
 
-from brainbyte import BaseApp, setup_logger
+from brainbyte import BaseApp
 from brainbyte.sensors import HokuyoSensorSim
+from brainbyte.robots.movel.pioneerBot import *
 import matplotlib.pyplot as plt
 import numpy as np
 import time
+import traceback
 
 def draw_laser_data(laser_data, max_sensor_range=5, save_path=None):
     """Plota cinemática do laser em um gráfico 2D.
@@ -68,38 +70,16 @@ class ObstacleAvoidanceTester(BaseApp):
         """Configura recursos necessários antes da simulação começar."""
         self.logger.info("Configurando o robô para o teste...")
         
-        self.robotname = 'PioneerP3DX'
+        # Instancia o robô usando a nova classe 
+        self.robot = PioneerBot(sim=self.sim, robot_name='PioneerP3DX')
 
-        # Handles do robô e rodas
-        self.robotHandle = self.sim.getObject('/' + self.robotname)
-        self.l_wheel = self.sim.getObject('/' + self.robotname + '/leftMotor')
-        self.r_wheel = self.sim.getObject('/' + self.robotname + '/rightMotor')
+        # Usa a propriedade integrada para ver a pose inciial
+        self.logger.info(f'Pose inicial do robô (x,y,theta): {self.robot.pose}')
 
-        # Verifica se os handles foram obtidos corretamente
-        bad = []
-        for name, h in (('robot', self.robotHandle), ('leftWheel', self.l_wheel), ('rightWheel', self.r_wheel)):
-            if h == -1:
-                bad.append(name)
+        # Instancia o sensor (usando o nome dinâmico do robô)
+        self.hokuyo_sensor = HokuyoSensorSim(self.sim, f"/{self.robot.robot_name}")
 
-        if bad:
-            self.logger.error(f"Handles inválidos: {bad}. Verifique nomes dos objetos na cena e paths usados.")
-            raise RuntimeError(f"Handles inválidos: {bad}")
-        else:
-            self.logger.debug(f"Handles: robot={self.robotHandle}, left={self.l_wheel}, right={self.r_wheel}")
-        
-        # Posição inicial do robô
-        pos = self.sim.getObjectPosition(self.robotHandle, self.sim.handle_world)
-        self.logger.info(f'Posição inicial do robô: {pos}')
-        
-        # Parâmetros do Pioneer P3DX
-        self.L = 0.381   # Distância entre eixos (metros)
-        self.r = 0.0975  # Raio das rodas (metros)
-        
-        # Instância do sensor
-        self.hokuyo_sensor = HokuyoSensorSim(self.sim, "/" + self.robotname + "/fastHokuyo")
-        
         # Pré-calcular índices do sensor (economiza operações no loop)
-        # Típico: 684 pontos, então frente=342, esq=513, dir=171
         self.sensor_n_points = 684
         self.idx_frente = self.sensor_n_points // 2
         self.idx_esq = (3 * self.sensor_n_points) // 4
@@ -177,16 +157,9 @@ class ObstacleAvoidanceTester(BaseApp):
             # Obstáculo detectado: recua e gira para o lado mais livre
             v = self.VEL_RECUA
             w = self.ANGULO_GIRO if dist_esq > dist_dir else -self.ANGULO_GIRO
-
-        # Cinemática inversa: converter velocidade linear (v) e angular (w) 
-        # para velocidades das rodas esquerda (wl) e direita (wr)
-        wl = (v / self.r) - (w * self.L) / (2 * self.r)
-        wr = (v / self.r) + (w * self.L) / (2 * self.r)
-
         # Aplicar velocidades nos motores
         try:
-            self.sim.setJointTargetVelocity(self.l_wheel, wl)
-            self.sim.setJointTargetVelocity(self.r_wheel, wr)
+            self.robot.set_wheel_velocity(linear_vel=v, angular_vel=w)
         except Exception as e:
             self.logger.error(f"Erro ao aplicar velocidades nos motores: {e}")
     
@@ -194,8 +167,7 @@ class ObstacleAvoidanceTester(BaseApp):
         """Executado após a simulação terminar - parada segura."""
         self.logger.info("Parando motores e finalizando simulação...")
         try:
-            self.sim.setJointTargetVelocity(self.l_wheel, 0)
-            self.sim.setJointTargetVelocity(self.r_wheel, 0)
+            self.robot.stop()
             self.logger.info("Simulação finalizada com sucesso")
         except Exception as e:
             self.logger.error(f"Erro ao parar motores: {e}")
@@ -211,4 +183,11 @@ def app():
 
 
 if __name__ == "__main__":
-    app()
+    try:
+        app()
+    except Exception as e:
+        print("\n" + "="*50)
+        print("💥 ERRO FATAL CAPTURADO:")
+        traceback.print_exc()
+        print("="*50 + "\n")
+        input("Pressione ENTER para sair...") # Pausa a tela para você conseguir ler

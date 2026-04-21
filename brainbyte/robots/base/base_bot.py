@@ -1,5 +1,10 @@
 from abc import ABC, abstractmethod
-import numpy as np
+from brainbyte.utils import *
+from brainbyte.utils.math import * 
+
+# Importando todos os sensores
+from brainbyte.sensors import * 
+
 
 class BaseBot(ABC):
     """
@@ -31,6 +36,7 @@ class BaseBot(ABC):
         pos = self.sim.getObjectPosition(self.robot_handle, ref)
         ori = self.sim.getObjectOrientation(self.robot_handle, ref)
         return pos, ori
+    
 
     def stop(self):
         """

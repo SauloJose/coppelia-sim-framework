@@ -20,14 +20,12 @@ Example:
 """
 
 from brainbyte.core.base_app import BaseApp
-from brainbyte.core.logging import setup_logger, ProfessionalFormatter
-from brainbyte.utils.plotting import Plot2D, Plot3D
+from brainbyte.robots import * 
+from brainbyte.utils import *
+from brainbyte.sensors import *
+
 
 __version__ = "1.1.0"
 __all__ = [
     'BaseApp',
-    'setup_logger',
-    'ProfessionalFormatter',
-    'Plot2D',
-    'Plot3D',
 ]

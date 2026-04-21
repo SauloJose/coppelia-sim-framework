@@ -8,10 +8,15 @@ from brainbyte.gui.auxF import *
 
 from brainbyte.utils.logging import *  # Certifique-se de que este módulo existe
 
+import traceback
+
+# Valores para ler logs
+LOG_BRAIN_FILE = 'brainbyte/logs/main.log'
+LOG_APP_FILE = 'brainbyte/logs/simulation.log'
 
 class brainGUI:
     def __init__(self):
-        self.logger = setup_logger(__name__, '[BRAINBYTE]')
+        self.logger = setup_logger(__name__, '[BRAINBYTE]',log_file=LOG_BRAIN_FILE)
         self.examples_folder = Path("examples")
         self.examples_list = []
         # Configurações padrão
@@ -118,7 +123,53 @@ class brainGUI:
             # Garante que o cursor volte a aparecer se o menu for fechado/quebrado
             sys.stdout.write('\033[?25h')
             sys.stdout.flush()
+    
+    def _ler_arquivo_log(self, caminho_log):
+        """Lê e retorna as últimas 20 linhas de um arquivo de log específico."""
+        log_path = Path(caminho_log)
+        
+        if not log_path.exists():
+            return f"Nenhum arquivo de log encontrado no caminho:\n'{caminho_log}'."
             
+        try:
+            with open(log_path, 'r', encoding='utf-8') as f:
+                linhas = f.readlines()
+                if not linhas:
+                    return "O arquivo de log está vazio no momento."
+                else:
+                    # Pega as últimas 20 linhas
+                    ultimas_linhas = linhas[-20:]
+                    return "".join(ultimas_linhas)
+        except Exception as e:
+            return f"Erro ao tentar ler o arquivo de log:\n{e}"
+
+    def _menu_logs(self):
+        """Submenu para escolher entre os diferentes arquivos de log."""
+        opcoes_logs = [
+            "Log do Sistema",
+            "Log da Simulação",
+            "Voltar"
+        ]
+        
+        while True:
+            escolha = self._menu_navegavel(
+                "VISUALIZADOR DE LOGS",
+                opcoes_logs,
+                msg_raposa="Qual arquivo de log você deseja analisar?",
+                subtitulo="Selecione a origem dos logs"
+            )
+            
+            if escolha == -1 or escolha == 2:  # Voltar ou pressionou 'q'
+                break
+            elif escolha == 0:
+                # Log principal do sistema
+                conteudo = self._ler_arquivo_log(LOG_BRAIN_FILE)
+                self._exibir_texto_com_raposa("Log do Sistema (main.log)", conteudo)
+            elif escolha == 1:
+                # Log da simulação (ATENÇÃO: Ajuste o nome do arquivo se o seu for diferente)
+                conteudo = self._ler_arquivo_log(LOG_APP_FILE)
+                self._exibir_texto_com_raposa("Log da Simulação", conteudo)
+
     def _menu_configuracoes(self):
         """Submenu de configurações com checkboxes sem flick na tela."""
         opcoes = [
@@ -246,7 +297,14 @@ class brainGUI:
 
             if hasattr(module, 'app'):
                 fox_print(f"O exemplo '{selected}' foi iniciado. Para pausar ou cancelar clique em 'ctrl+c' ou 's'. ", width=40)
-                module.app()
+                try:
+                    module.app()
+                except Exception as e:
+                    print("\n" + "="*50)
+                    print("💥 ERRO FATAL CAPTURADO:")
+                    traceback.print_exc()
+                    print("="*50 + "\n")
+                    input("Pressione ENTER para sair...") # Pausa a tela para você conseguir ler
             else:
                 fox_print(f"O exemplo '{selected}' não tem função 'app()'.", width=40)
                 get_key()
@@ -301,6 +359,7 @@ class brainGUI:
                 "Estrutura das pastas",
                 "Sobre o sistema",
                 "Configurações",
+                "Ver Logs",
                 "Sair"
             ]
             escolha = self._menu_navegavel(
@@ -310,7 +369,7 @@ class brainGUI:
                 subtitulo=None
             )
             
-            if escolha == -1 or escolha == 6:  # Sair
+            if escolha == -1 or escolha == 7:  # Sair
                 # Limpa a tela para a despedida ficar limpa
                 os.system('cls' if os.name == 'nt' else 'clear')
                 self.banner()
@@ -325,7 +384,8 @@ class brainGUI:
                     "- Iniciar simulação: execute exemplos pré-programados.\n"
                     "- Comandos: lista de comandos disponíveis.\n"
                     "- Estrutura: mostra como o projeto está organizado.\n"
-                    "- Configurações: ajuste opções do sistema."
+                    "- Configurações: ajuste opções do sistema.\n"
+                    "- Ver Logs: exibe os últimos registros de execução."
                 )
             elif escolha == 2:
                 self._exibir_texto_com_raposa(
@@ -351,3 +411,5 @@ class brainGUI:
                 )
             elif escolha == 5:
                 self._menu_configuracoes()
+            elif escolha == 6:  # <-- CHAMADA PARA OS LOGS
+                self._menu_logs()

@@ -7,7 +7,7 @@ Exemplo de uso do framework CoppeliaSim que demonstra:
 - Captura e visualização de trajetória
 """
 
-from brainbyte import BaseApp, Plot2D, setup_logger
+from brainbyte import BaseApp, Plot2D
 import numpy as np
 
 
