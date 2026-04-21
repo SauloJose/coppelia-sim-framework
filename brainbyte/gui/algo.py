@@ -1,57 +1,4 @@
-import os
-import sys
-from pathlib import Path
-import shutil
-import importlib
-import textwrap
-from brainbyte.gui.auxF import * 
-
-from brainbyte.utils.logging import *  # Certifique-se de que este módulo existe
-
-
-class brainGUI:
-    def __init__(self):
-        self.logger = setup_logger(__name__, '[BRAINBYTE]')
-        self.examples_folder = Path("examples")
-        self.examples_list = []
-        # Configurações padrão
-        self.config = {
-            'cli_commands': False,
-            'ros_connection': False,
-            'udp_connection': False 
-        }
-
-    @staticmethod
-    def banner():
-        """Exibe o banner ASCII do BRAINBYTE com alinhamento consistente."""
-        os.system('cls' if os.name == 'nt' else 'clear')
-        
-        term_width = shutil.get_terminal_size().columns
-        
-        title_lines = [
-            "██████╗ ██████╗  █████╗ ██╗███╗   ██╗██████╗ ██╗   ██╗████████╗███████╗",
-            "██╔══██╗██╔══██╗██╔══██╗██║████╗  ██║██╔══██╗╚██╗ ██╔╝╚══██╔══╝██╔════╝",
-            "██████╔╝██████╔╝███████║██║██╔██╗ ██║██████╔╝ ╚████╔╝    ██║   ███████╗",
-            "██╔══██╗██╔══██╗██╔══██║██║██║╚██╗██║██╔══██╗  ╚██╔╝     ██║   ╚════██║",
-            "██████╔╝██║  ██║██║  ██║██║██║ ╚████║██████╔╝   ██║      ██║   ███████║",
-            "╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝╚═════╝    ╚═╝      ╚═╝   ╚══════╝"
-        ]
-        max_title_len = max(len(line) for line in title_lines)
-        
-        subtitle = "Robotics  Manager  |  Script Organization & LLMs  |  Windows/Linux"
-        line_char = "─"
-        decor_len = min(max_title_len, term_width - 4)
-        left_margin = max(0, (term_width - max_title_len) // 2)
-        
-        print("\033[90m" + " " * left_margin + line_char * decor_len + "\033[0m")
-        for line in title_lines:
-            print("\033[91m" + " " * left_margin + line + "\033[0m")
-        
-        subtitle_left = max(0, (term_width - len(subtitle)) // 2)
-        print(" " * subtitle_left + "\033[90m" + subtitle + "\033[0m")
-        print("\033[90m" + " " * left_margin + line_char * decor_len + "\033[0m")
-
-    # ---------- Menus navegáveis ----------
+# ---------- Menus navegáveis ----------
     def _menu_navegavel(self, titulo, opcoes, msg_raposa=None, subtitulo=None):
         """Exibe um menu navegável fluido, atualizando apenas as linhas necessárias."""
         # Limpa a tela e imprime o cabeçalho APENAS na primeira vez
@@ -118,7 +65,7 @@ class brainGUI:
             # Garante que o cursor volte a aparecer se o menu for fechado/quebrado
             sys.stdout.write('\033[?25h')
             sys.stdout.flush()
-            
+
     def _menu_configuracoes(self):
         """Submenu de configurações com checkboxes sem flick na tela."""
         opcoes = [
@@ -193,94 +140,7 @@ class brainGUI:
             sys.stdout.write('\033[?25h')
             sys.stdout.flush()
 
-    def _exibir_texto_com_raposa(self, titulo, conteudo):
-        """Exibe uma tela informativa com a raposa e aguarda tecla."""
-        os.system('cls' if os.name == 'nt' else 'clear')
-        self.banner()
-        print(fox_say(titulo))
-        print("\n" + "\033[90m" + "─" * 70 + "\033[0m")
-        print(conteudo)
-        print("\n" + "\033[90m" + "─" * 70 + "\033[0m")
-        print("\nPressione qualquer tecla para voltar...")
-        get_key()  # aguarda
-
-    # ---------- Funcionalidades originais ----------
-    def _list_examples(self):
-        if not self.examples_folder.exists() or not self.examples_folder.is_dir():
-            self.logger.warning("A pasta 'examples' não foi encontrada.")
-            return []
-        examples = []
-        for file in self.examples_folder.glob("*.py"):
-            name = file.stem
-            if name != "__init__" and not name.startswith("."):
-                examples.append(name)
-        return sorted(examples)
-
-    def _choose_example(self):
-        """Menu de seleção de exemplos (navegável)"""
-        self.examples_list = self._list_examples()
-        if not self.examples_list:
-            fox_print("Nenhum exemplo encontrado na pasta 'examples/'.", width=40)
-            get_key()
-            return
-        
-        opcoes = self.examples_list + ["Voltar"]
-        idx = self._menu_navegavel(
-            "INICIAR SIMULAÇÃO",
-            opcoes,
-            msg_raposa="Escolha um exemplo para executar.",
-            subtitulo=f"{len(self.examples_list)} exemplos disponíveis"
-        )
-        if idx is None or idx == -1 or idx == len(self.examples_list):
-            return
-        selected = self.examples_list[idx]
-        self.logger.info(f"Iniciando exemplo: {selected}")
-        try:
-            module = importlib.import_module(f"examples.{selected}")
-
-            # --- MODIFICAÇÃO AQUI ---
-            # Limpa a tela para apagar o menu anterior
-            os.system('cls' if os.name == 'nt' else 'clear')
-            # Exibe o banner no topo
-            self.banner()
-
-            if hasattr(module, 'app'):
-                fox_print(f"O exemplo '{selected}' foi iniciado. Para pausar ou cancelar clique em 'ctrl+c' ou 's'. ", width=40)
-                module.app()
-            else:
-                fox_print(f"O exemplo '{selected}' não tem função 'app()'.", width=40)
-                get_key()
-        except Exception as e:
-            fox_print(f"Erro: {type(e).__name__}: {e}", width=50)
-            get_key()
-
-    def _generate_tree(self, directory: Path, prefix: str = "", max_depth: int = 3, current_depth: int = 0) -> str:
-        """Gera uma representação em árvore do diretório especificado."""
-        if current_depth >= max_depth:
-            return ""
-        
-        lines = []
-        try:
-            items = sorted(directory.iterdir(), key=lambda p: (p.is_file(), p.name))
-        except PermissionError:
-            return f"{prefix}[Permissão negada]\n"
-        
-        # Filtra itens que não queremos mostrar
-        ignore_patterns = {'__pycache__', '.git', '.venv', 'venv', 'env', '.idea', '.vscode', 'node_modules', 'build', 'dist'}
-        filtered_items = [item for item in items if item.name not in ignore_patterns and not item.name.startswith('.')]
-        
-        for i, item in enumerate(filtered_items):
-            is_last = i == len(filtered_items) - 1
-            connector = "└── " if is_last else "├── "
-            lines.append(f"{prefix}{connector}{item.name}")
-            
-            if item.is_dir():
-                extension = "    " if is_last else "│   "
-                subtree = self._generate_tree(item, prefix + extension, max_depth, current_depth + 1)
-                if subtree:
-                    lines.append(subtree.rstrip('\n'))
-        
-        return '\n'.join(lines)
+    # (Mantenha _exibir_texto_com_raposa, _list_examples, _choose_example e _generate_tree inalterados)
 
     # ---------- Loop principal ----------
     def run(self):
