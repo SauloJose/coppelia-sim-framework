@@ -7,14 +7,11 @@ Exemplo de uso do framework CoppeliaSim que demonstra:
 - Validação robusta de dados de sensor
 """
 
-from coppelia_sim_framework import BaseApp, setup_logger
-from coppelia_sim_framework.sensors import HokuyoSensorSim
+from brainbyte import BaseApp, setup_logger
+from brainbyte.sensors import HokuyoSensorSim
 import matplotlib.pyplot as plt
 import numpy as np
 import time
-
-logger = setup_logger(__name__, '[APP]')
-
 
 def draw_laser_data(laser_data, max_sensor_range=5, save_path=None):
     """Plota cinemática do laser em um gráfico 2D.
@@ -50,8 +47,6 @@ def draw_laser_data(laser_data, max_sensor_range=5, save_path=None):
     
     fig.savefig(save_path, dpi=100)
     plt.close(fig)
-    logger.info(f"Gráfico do LIDAR salvo em: {save_path}")
-
 
 class ObstacleAvoidanceTester(BaseApp):
     """Teste de evasão de obstáculos com sensor LIDAR.
@@ -71,7 +66,7 @@ class ObstacleAvoidanceTester(BaseApp):
 
     def setup(self):
         """Configura recursos necessários antes da simulação começar."""
-        logger.info("Configurando o robô para o teste...")
+        self.logger.info("Configurando o robô para o teste...")
         
         self.robotname = 'PioneerP3DX'
 
@@ -87,14 +82,14 @@ class ObstacleAvoidanceTester(BaseApp):
                 bad.append(name)
 
         if bad:
-            logger.error(f"Handles inválidos: {bad}. Verifique nomes dos objetos na cena e paths usados.")
+            self.logger.error(f"Handles inválidos: {bad}. Verifique nomes dos objetos na cena e paths usados.")
             raise RuntimeError(f"Handles inválidos: {bad}")
         else:
-            logger.debug(f"Handles: robot={self.robotHandle}, left={self.l_wheel}, right={self.r_wheel}")
+            self.logger.debug(f"Handles: robot={self.robotHandle}, left={self.l_wheel}, right={self.r_wheel}")
         
         # Posição inicial do robô
         pos = self.sim.getObjectPosition(self.robotHandle, self.sim.handle_world)
-        logger.info(f'Posição inicial do robô: {pos}')
+        self.logger.info(f'Posição inicial do robô: {pos}')
         
         # Parâmetros do Pioneer P3DX
         self.L = 0.381   # Distância entre eixos (metros)
@@ -109,32 +104,32 @@ class ObstacleAvoidanceTester(BaseApp):
         self.idx_frente = self.sensor_n_points // 2
         self.idx_esq = (3 * self.sensor_n_points) // 4
         self.idx_dir = self.sensor_n_points // 4
-        logger.debug(f"Índices do sensor pré-calculados: frente={self.idx_frente}, esq={self.idx_esq}, dir={self.idx_dir}")
+        self.logger.debug(f"Índices do sensor pré-calculados: frente={self.idx_frente}, esq={self.idx_esq}, dir={self.idx_dir}")
 
     def post_start(self):
         """Executado logo após a simulação iniciar - captura primeira imagem do sensor LIDAR."""
-        logger.info("Capturando primeira imagem do sensor LIDAR...")
+        self.logger.info("Capturando primeira imagem do sensor LIDAR...")
         try:
             laser_data = np.asarray(self.hokuyo_sensor.getSensorData())
             
             # Validar forma do array (deve ser 2D: [pontos, 2])
             if laser_data is None or laser_data.size == 0:
-                logger.warning("Sensor retornou dados vazios")
+                self.logger.warning("Sensor retornou dados vazios")
                 return
             
             if laser_data.ndim == 0:
-                logger.error(f"Sensor retornou valor escalar: {laser_data}")
+                self.logger.error(f"Sensor retornou valor escalar: {laser_data}")
                 return
                 
             if laser_data.ndim != 2 or laser_data.shape[1] < 2:
-                logger.error(f"Formato incorreto do sensor: shape={laser_data.shape}, esperado (N, 2)")
+                self.logger.error(f"Formato incorreto do sensor: shape={laser_data.shape}, esperado (N, 2)")
                 return
             
-            logger.info(f"Primeira imagem capturada com {laser_data.shape[0]} pontos")
+            self.logger.info(f"Primeira imagem capturada com {laser_data.shape[0]} pontos")
             draw_laser_data(laser_data, max_sensor_range=5)
             
         except Exception as e:
-            logger.error(f"Erro ao capturar dados iniciais do sensor: {e}")
+            self.logger.error(f"Erro ao capturar dados iniciais do sensor: {e}")
 
     def loop(self, t):
         """Executado a cada passo da simulação."""
@@ -142,7 +137,7 @@ class ObstacleAvoidanceTester(BaseApp):
         try:
             laser_data = np.asarray(self.hokuyo_sensor.getSensorData())
         except Exception as e:
-            logger.error(f"Erro ao ler sensor LIDAR: {e}")
+            self.logger.error(f"Erro ao ler sensor LIDAR: {e}")
             return
 
         # Validações de segurança: dados vazios ou formato inválido
@@ -150,11 +145,11 @@ class ObstacleAvoidanceTester(BaseApp):
             return
         
         if laser_data.ndim == 0:
-            logger.error(f"Sensor retornou valor escalar ao invés de array: {laser_data}")
+            self.logger.error(f"Sensor retornou valor escalar ao invés de array: {laser_data}")
             return
         
         if laser_data.ndim != 2 or laser_data.shape[1] < 2:
-            logger.error(f"Formato do sensor inválido: shape={laser_data.shape}, esperado (N, 2)")
+            self.logger.error(f"Formato do sensor inválido: shape={laser_data.shape}, esperado (N, 2)")
             return
         
         # Atualizar índices dinamicamente se o tamanho mudar (raro, mas seguro)
@@ -164,14 +159,14 @@ class ObstacleAvoidanceTester(BaseApp):
             self.idx_frente = self.sensor_n_points // 2
             self.idx_esq = (3 * self.sensor_n_points) // 4
             self.idx_dir = self.sensor_n_points // 4
-            logger.debug(f"Tamanho do sensor alterado para {self.sensor_n_points} pontos")
+            self.logger.debug(f"Tamanho do sensor alterado para {self.sensor_n_points} pontos")
 
         # Extrair distâncias nas três direções (coluna 1 = distância, coluna 0 = ângulo)
         dist_frente = laser_data[self.idx_frente, 1]
         dist_esq = laser_data[self.idx_esq, 1]
         dist_dir = laser_data[self.idx_dir, 1]
 
-        logger.debug(f"LIDAR [{t:.2f}s] Esq: {dist_esq:.2f}m | Frente: {dist_frente:.2f}m | Dir: {dist_dir:.2f}m")
+        self.logger.debug(f"LIDAR [{t:.2f}s] Esq: {dist_esq:.2f}m | Frente: {dist_frente:.2f}m | Dir: {dist_dir:.2f}m")
 
         # === LÓGICA DE DESVIO DE OBSTÁCULOS ===
         if dist_frente > self.DIST_SEGURA:
@@ -193,17 +188,17 @@ class ObstacleAvoidanceTester(BaseApp):
             self.sim.setJointTargetVelocity(self.l_wheel, wl)
             self.sim.setJointTargetVelocity(self.r_wheel, wr)
         except Exception as e:
-            logger.error(f"Erro ao aplicar velocidades nos motores: {e}")
+            self.logger.error(f"Erro ao aplicar velocidades nos motores: {e}")
     
     def stop(self):
         """Executado após a simulação terminar - parada segura."""
-        logger.info("Parando motores e finalizando simulação...")
+        self.logger.info("Parando motores e finalizando simulação...")
         try:
             self.sim.setJointTargetVelocity(self.l_wheel, 0)
             self.sim.setJointTargetVelocity(self.r_wheel, 0)
-            logger.info("Simulação finalizada com sucesso")
+            self.logger.info("Simulação finalizada com sucesso")
         except Exception as e:
-            logger.error(f"Erro ao parar motores: {e}")
+            self.logger.error(f"Erro ao parar motores: {e}")
         
 
 def app():

@@ -12,27 +12,41 @@ Comments:
 """
 
 import os
-import sys 
-import time 
+import sys
+import time
+import tempfile
+import subprocess
+import platform
+import shutil
 import logging
 import keyboard
 from coppeliasim_zmqremoteapi_client import RemoteAPIClient
-from coppelia_sim_framework.core.logging import setup_logger
+from brainbyte.core.logging import *
 
-logger = setup_logger(__name__, '[MAIN]')
-
+    
 class BaseApp:
     """Base class providing the minimal lifecycle for a simulation application.
 
     Subclasses must override `setup()` and `loop(t)` to implement the test logic.
     """
-    def __init__(self, scene_file=None, sim_time=10.0):
+    def __init__(self, scene_file=None, sim_time=10.0, log_file =None):
         self.scene_file = scene_file
         self.sim_time = sim_time
-        
+
+        # Configurar arquivo de log
+        if log_file is None:
+            fd, log_file = tempfile.mkstemp(prefix='sim_log_', suffix='.log')
+            os.close(fd)
+            self._temp_log_file = log_file
+        else:
+            self._temp_log_file = None
+
         # Warn the user BEFORE the code potentially hangs
-        logger.info("Attempting to connect to the CoppeliaSim engine...")
-        logger.info("If the terminal freezes on this message, the simulator is CLOSED. Please open CoppeliaSim!")
+        self.logger = setup_logger(__name__, '[MAIN]', log_file=log_file)
+        self.log_file = log_file
+        
+        self.logger.info("Attempting to connect to CoppeliaSim engine...")
+        self.logger.info("If the terminal freezes, please open CoppeliaSim!")
         
         try:
             # The code will "freeze" here if the simulator is closed
@@ -46,63 +60,52 @@ class BaseApp:
                 time.sleep(1)
 
             # If execution reaches this point, the connection was successful!
-            logger.info("Successfully connected to the simulator!")
+            self.logger.info("Successfully connected to the simulator!")
             
         except Exception as e:
-            logger.error("CONNECTION ERROR: Could not establish communication.")
-            logger.error(f"Details: {e}")
+            self.logger.error("CONNECTION ERROR: Could not establish communication.")
+            self.logger.error(f"Details: {e}")
             sys.exit(1)
 
     def run(self):
-        """Main method that manages the simulation lifecycle."""
-        # Load the scene (if specified)
-        if self.scene_file:
-            # CoppeliaSim requires ABSOLUTE paths to load scenes
-            scene_path = os.path.abspath(f"scenes/{self.scene_file}")
-            if not os.path.exists(scene_path):
-                raise FileNotFoundError(f"Scene not found: {scene_path}")
-            
-            logger.info(f"Loading scene: {self.scene_file}...")
-            self.sim.loadScene(scene_path)  # Load a .ttt scene file
-
-        # Configure synchronous mode
-        self.client.setStepping(True)
-
-        # Execute the test-specific setup (defined by the child class)
-        self.setup()
-
-        # Start the simulation
-        logger.info("Starting simulation...")
-        self.sim.startSimulation()
-
-        # Execute post-initialization (e.g., capturing the first sensor reading)
-        self.post_start()
-
-        # Main loop running for the scheduled simulation time
         try:
+            # Carregar cena
+            if self.scene_file:
+                scene_path = os.path.abspath(f"scenes/{self.scene_file}")
+                if not os.path.exists(scene_path):
+                    raise FileNotFoundError(f"Scene not found: {scene_path}")
+                self.logger.info(f"Loading scene: {self.scene_file}...")
+                self.sim.loadScene(scene_path)
+            
+            self.client.setStepping(True)
+            self.setup()
+            self.logger.info("Starting simulation...")
+            self.sim.startSimulation()
+            self.post_start()
+            
+            # Loop principal
             while (t := self.sim.getSimulationTime()) < self.sim_time:
-                
-                # Quick user interruption check.
-                # Pressing 's' interrupts the simulation immediately.
                 if keyboard.is_pressed('s'):
-                    logger.warning(f"Simulation interrupted by the user at time {t:.2f}s.")
+                    self.logger.warning(f"Simulation interrupted by user at t={t:.2f}s")
                     break
-                
                 self.loop(t)
-                
-                # Advance one step in the simulator
                 self.client.step()
                 
         except KeyboardInterrupt:
-            logger.warning("Simulation manually interrupted from the terminal.")
-            
+            self.logger.warning("Simulation manually interrupted from terminal.")
+        except Exception as e:
+            self.logger.error(f"Unexpected error: {e}", exc_info=True)
         finally:
-            # Stop the simulation regardless of error or success
-            logger.info("Stopping simulation...")
-
-            self.stop() # Execute custom stop procedures
+            self.logger.info("Stopping simulation...")
+            self.stop()
             self.sim.stopSimulation()
-
+            
+            # Limpar arquivo temporário, se usado
+            if self._temp_log_file and os.path.exists(self._temp_log_file):
+                try:
+                    os.remove(self._temp_log_file)
+                except OSError:
+                    pass
     # ==========================================
     # METHODS TO BE OVERRIDDEN IN CHILD CLASSES
     # ==========================================

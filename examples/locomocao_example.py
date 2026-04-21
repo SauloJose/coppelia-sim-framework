@@ -7,10 +7,9 @@ Exemplo de uso do framework CoppeliaSim que demonstra:
 - Captura e visualização de trajetória
 """
 
-from coppelia_sim_framework import BaseApp, Plot2D, setup_logger
+from brainbyte import BaseApp, Plot2D, setup_logger
 import numpy as np
 
-logger = setup_logger(__name__, '[APP]')
 
 
 class LocomocaoTeste(BaseApp):
@@ -27,7 +26,7 @@ class LocomocaoTeste(BaseApp):
 
     def setup(self):
         """Configura recursos necessários antes da simulação começar."""
-        logger.info("Configurando o robô para o teste...")
+        self.logger.info("Configurando o robô para o teste...")
         
         self.robotname = 'Pioneer_p3dx'
 
@@ -43,14 +42,14 @@ class LocomocaoTeste(BaseApp):
                 bad.append(name)
 
         if bad:
-            logger.error(f"Handles inválidos: {bad}. Verifique nomes dos objetos na cena e paths usados.")
+            self.logger.error(f"Handles inválidos: {bad}. Verifique nomes dos objetos na cena e paths usados.")
             raise RuntimeError(f"Handles inválidos: {bad}")
         else:
-            logger.debug(f"Handles: robot={self.robotHandle}, left={self.l_wheel}, right={self.r_wheel}")
+            self.logger.debug(f"Handles: robot={self.robotHandle}, left={self.l_wheel}, right={self.r_wheel}")
         
         # Posição inicial do robô
         pos = self.sim.getObjectPosition(self.robotHandle, self.sim.handle_world)
-        logger.info(f'Posição inicial do robô: {pos}')
+        self.logger.info(f'Posição inicial do robô: {pos}')
         
         # Parâmetros do Pioneer P3DX
         self.L = 0.331       # Distância entre eixos (metros)
@@ -142,9 +141,9 @@ class LocomocaoTeste(BaseApp):
         try:
             self.sim.setJointTargetVelocity(self.l_wheel, self.wl)
             self.sim.setJointTargetVelocity(self.r_wheel, self.wr)
-            logger.debug(f"Velocidades enviadas: wl={self.wl:.4f}, wr={self.wr:.4f} (v={self.v:.3f}, w={self.w:.3f})")
+            self.logger.debug(f"Velocidades enviadas: wl={self.wl:.4f}, wr={self.wr:.4f} (v={self.v:.3f}, w={self.w:.3f})")
         except Exception as e:
-            logger.error("Falha ao aplicar velocidades nas juntas.")
+            self.logger.error("Falha ao aplicar velocidades nas juntas.")
 
         # Obter e registrar posição real do robô
         pos_real = self.sim.getObjectPosition(self.robotHandle, self.sim.handle_world)
@@ -152,24 +151,24 @@ class LocomocaoTeste(BaseApp):
         
     def stop(self):
         """Executado após a simulação terminar."""
-        logger.info("Parando e finalizando simulação...")
+        self.logger.info("Parando e finalizando simulação...")
         
         # Parar os motores (segurança)
         try:
             self.sim.setJointTargetVelocity(self.l_wheel, 0)
             self.sim.setJointTargetVelocity(self.r_wheel, 0)
         except Exception as e:
-            logger.warning(f"Erro ao parar motores: {e}")
+            self.logger.warning(f"Erro ao parar motores: {e}")
 
         # Obter posição final real
         pos_final = self.sim.getObjectPosition(self.robotHandle, self.sim.handle_world)
         ori_final = self.sim.getObjectOrientation(self.robotHandle, self.sim.handle_world)
         
-        logger.info(f"Posição final: {pos_final}")
-        logger.info(f"Orientação final: {np.rad2deg(ori_final)}")
+        self.logger.info(f"Posição final: {pos_final}")
+        self.logger.info(f"Orientação final: {np.rad2deg(ori_final)}")
 
         # Plotar trajetória real (obtida da simulação)
-        logger.info(f"Total de pontos registrados: {len(self.traj_real)}")
+        self.logger.info(f"Total de pontos registrados: {len(self.traj_real)}")
         Plot2D(
             self.traj_real, 
             'X (m)', 

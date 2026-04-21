@@ -13,7 +13,7 @@ setup(
     description="Professional Python framework for CoppeliaSim robot simulations",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/coppelia-sim-framework",
+    url="https://github.com/SauloJose/coppelia-sim-framework",
     packages=find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",

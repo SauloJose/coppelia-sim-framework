@@ -19,9 +19,9 @@ Example:
             pass
 """
 
-from coppelia_sim_framework.core.base_app import BaseApp
-from coppelia_sim_framework.core.logging import setup_logger, ProfessionalFormatter
-from coppelia_sim_framework.utils.plotting import Plot2D, Plot3D
+from brainbyte.core.base_app import BaseApp
+from brainbyte.core.logging import setup_logger, ProfessionalFormatter
+from brainbyte.utils.plotting import Plot2D, Plot3D
 
 __version__ = "1.1.0"
 __all__ = [

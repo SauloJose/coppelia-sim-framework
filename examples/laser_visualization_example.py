@@ -14,11 +14,8 @@ import matplotlib.pyplot as plt
 import traceback
 import logging
 
-from coppelia_sim_framework import BaseApp, setup_logger
-from coppelia_sim_framework.sensors import HokuyoSensorSim
-
-
-logger = setup_logger(__name__, '[LASER]')
+from brainbyte import BaseApp, setup_logger
+from brainbyte.sensors import HokuyoSensorSim
 
 
 def draw_laser_data(laser_data, max_sensor_range=5, show=False, save_path=None):
@@ -61,7 +58,6 @@ def draw_laser_data(laser_data, max_sensor_range=5, show=False, save_path=None):
     if save_path:
         fig.savefig(save_path)
         plt.close(fig)
-        logger.info(f"Laser plot saved to: {save_path}")
         return
 
     if show:
@@ -70,7 +66,7 @@ def draw_laser_data(laser_data, max_sensor_range=5, show=False, save_path=None):
             plt.pause(0.1)
         except Exception:
             # Environment without GUI
-            logger.warning("Failed to show figure (no GUI). Saving to 'laser_plot.png'.")
+            print("Failed to show figure (no GUI). Saving to 'laser_plot.png'.")
             fig.savefig('laser_plot.png')
             plt.close(fig)
     else:
@@ -79,7 +75,7 @@ def draw_laser_data(laser_data, max_sensor_range=5, show=False, save_path=None):
         filename = f'laser_plot_{timestamp}.png'
         fig.savefig(filename)
         plt.close(fig)
-        logger.info(f"Laser plot saved to: {filename}")
+        print(f"Laser plot saved to: {filename}")
 
 
 class LaserVisualizationExample(BaseApp):
@@ -117,7 +113,7 @@ class LaserVisualizationExample(BaseApp):
         3. Logs initial position
         4. Pre-calculates kinematic constants (L, r)
         """
-        logger.info("Configuring robot for laser visualization...")
+        self.logger.info("Configuring robot for laser visualization...")
         self.robotname = 'PioneerP3DX'
 
         # Get handles for robot and wheels
@@ -132,17 +128,17 @@ class LaserVisualizationExample(BaseApp):
                 bad.append(name)
 
         if bad:
-            logger.error(f"Invalid handles: {bad}. Verify object names in scene.")
+            self.logger.error(f"Invalid handles: {bad}. Verify object names in scene.")
             raise RuntimeError(f"Invalid handles: {bad}")
         else:
-            logger.debug(f"Handles: robot={self.robotHandle}, left={self.l_wheel}, right={self.r_wheel}")
+            self.logger.debug(f"Handles: robot={self.robotHandle}, left={self.l_wheel}, right={self.r_wheel}")
         
         # Initialize sensor (don't read data yet, simulation hasn't started)
         self.hokuyo_sensor = HokuyoSensorSim(self.sim, "/" + self.robotname + "/fastHokuyo")
 
         # Get initial robot position
         pos = self.sim.getObjectPosition(self.robotHandle, self.sim.handle_world)
-        logger.info(f'Initial robot position: {pos}')
+        self.logger.info(f'Initial robot position: {pos}')
         
         # Pioneer P3DX kinematics
         self.L = 0.381   # Wheel base (meters)
@@ -155,11 +151,11 @@ class LaserVisualizationExample(BaseApp):
         If auto_diagnostic=True, runs motor validation pulse.
         """
         if getattr(self, 'auto_diagnostic', False):
-            logger.info("Running automatic diagnostic: motor pulse.")
+            self.logger.info("Running automatic diagnostic: motor pulse.")
             try:
                 self.diagnostic_pulse(duration=1.0, speed=0.6)
             except Exception:
-                logger.exception("Automatic diagnostic failed")
+                self.logger.exception("Automatic diagnostic failed")
 
     def diagnostic_pulse(self, duration=1.0, speed=0.6):
         """Send velocity pulse to motors for hardware validation.
@@ -174,7 +170,7 @@ class LaserVisualizationExample(BaseApp):
         3. Ensures motors stop after pulse completes
         """
         if any(h == -1 for h in (self.l_wheel, self.r_wheel)):
-            logger.error("Cannot run diagnostic: invalid wheel handles")
+            self.logger.error("Cannot run diagnostic: invalid wheel handles")
             return
 
         # Calculate wl/wr for v=speed, w=0
@@ -183,7 +179,7 @@ class LaserVisualizationExample(BaseApp):
         wl = v / self.r - (w * self.L) / (2 * self.r)
         wr = v / self.r + (w * self.L) / (2 * self.r)
 
-        logger.debug(f"Diagnostic pulse: wl={wl:.3f}, wr={wr:.3f}, duration={duration}s")
+        self.logger.debug(f"Diagnostic pulse: wl={wl:.3f}, wr={wr:.3f}, duration={duration}s")
 
         start = self.sim.getSimulationTime()
         try:
@@ -199,8 +195,8 @@ class LaserVisualizationExample(BaseApp):
                 self.sim.setJointTargetVelocity(self.l_wheel, 0)
                 self.sim.setJointTargetVelocity(self.r_wheel, 0)
             except Exception:
-                logger.exception("Failed to zero velocities after diagnostic")
-            logger.info("Diagnostic complete: pulse finished")
+                self.logger.exception("Failed to zero velocities after diagnostic")
+            self.logger.info("Diagnostic complete: pulse finished")
 
     def loop(self, t):
         """Main control loop executed at each simulation step.
@@ -224,7 +220,7 @@ class LaserVisualizationExample(BaseApp):
                 draw_laser_data(laser_data, 5, True)
             self._first_exec = False 
         except Exception:
-            logger.exception("Error reading sensor data in loop.")
+            self.logger.exception("Error reading sensor data in loop.")
             return
 
         n = len(laser_data)
@@ -244,7 +240,7 @@ class LaserVisualizationExample(BaseApp):
         dist_dir = laser_data[lado_direito, 1]
 
         # Log sensor readings (DEBUG level to avoid console spam in production)
-        logger.debug(f"[{t:.2f}s] Sensor -> Left: {dist_esq:.2f}m | Front: {dist_frente:.2f}m | Right: {dist_dir:.2f}m")
+        self.logger.debug(f"[{t:.2f}s] Sensor -> Left: {dist_esq:.2f}m | Front: {dist_frente:.2f}m | Right: {dist_dir:.2f}m")
 
         # === OBSTACLE AVOIDANCE LOGIC ===
         v = 0.0
@@ -270,12 +266,12 @@ class LaserVisualizationExample(BaseApp):
         wr = v / self.r + (w * self.L) / (2 * self.r)
 
         # Send velocity commands to motors
-        logger.debug(f"Velocity command: wl={wl:.3f}, wr={wr:.3f}")
+        self.logger.debug(f"Velocity command: wl={wl:.3f}, wr={wr:.3f}")
         try:
             self.sim.setJointTargetVelocity(self.l_wheel, wl)
             self.sim.setJointTargetVelocity(self.r_wheel, wr)
         except Exception:
-            logger.exception("Failed to apply velocities to motors.")
+            self.logger.exception("Failed to apply velocities to motors.")
         
 
 def app():

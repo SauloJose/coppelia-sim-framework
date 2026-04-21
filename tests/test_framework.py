@@ -14,7 +14,7 @@ class TestBaseAppInitialization(unittest.TestCase):
     @patch('coppelia_sim_framework.core.base_app.RemoteAPIClient')
     def test_successful_connection(self, mock_client):
         """Test successful connection to CoppeliaSim."""
-        from coppelia_sim_framework import BaseApp
+        from brainbyte import BaseApp
         
         mock_instance = MagicMock()
         mock_client.return_value = mock_instance
@@ -27,7 +27,7 @@ class TestBaseAppInitialization(unittest.TestCase):
     
     def test_base_app_methods_exist(self):
         """Test that BaseApp has required methods."""
-        from coppelia_sim_framework import BaseApp
+        from brainbyte import BaseApp
         
         required_methods = ['setup', 'loop', 'stop', 'post_start', 'run']
         for method in required_methods:
@@ -39,7 +39,7 @@ class TestLogging(unittest.TestCase):
     
     def test_setup_logger_returns_logger(self):
         """Test that setup_logger returns a logger instance."""
-        from coppelia_sim_framework import setup_logger
+        from brainbyte import setup_logger
         import logging
         
         logger = setup_logger(__name__, '[TEST]')
@@ -47,7 +47,7 @@ class TestLogging(unittest.TestCase):
     
     def test_professional_formatter(self):
         """Test that ProfessionalFormatter formats logs correctly."""
-        from coppelia_sim_framework import ProfessionalFormatter
+        from brainbyte import ProfessionalFormatter
         import logging
         
         formatter = ProfessionalFormatter('[TEST]')
@@ -75,7 +75,7 @@ class TestPlotting(unittest.TestCase):
     @patch('matplotlib.pyplot.show')
     def test_plot2d_creates_figure(self, mock_show):
         """Test that Plot2D creates and configures a figure."""
-        from coppelia_sim_framework import Plot2D
+        from brainbyte import Plot2D
         
         data = np.array([[0, 0], [1, 1], [2, 0]])
         
@@ -86,7 +86,7 @@ class TestPlotting(unittest.TestCase):
     @patch('matplotlib.pyplot.show')
     def test_plot3d_creates_figure(self, mock_show):
         """Test that Plot3D creates and configures a figure."""
-        from coppelia_sim_framework import Plot3D
+        from brainbyte import Plot3D
         
         data = np.array([[0, 0, 0], [1, 1, 1], [2, 0, 1]])
         
