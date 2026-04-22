@@ -77,7 +77,7 @@ class ObstacleAvoidanceTester(BaseApp):
         self.logger.info(f'Pose inicial do robô (x,y,theta): {self.robot.pose}')
 
         # Instancia o sensor (usando o nome dinâmico do robô)
-        self.hokuyo_sensor = HokuyoSensorSim(self.sim, f"/{self.robot.robot_name}")
+        self.hokuyo_sensor = HokuyoSensorSim(self.sim, f"/{self.robot.robot_name}/fastHokuyo")
 
         # Pré-calcular índices do sensor (economiza operações no loop)
         self.sensor_n_points = 684

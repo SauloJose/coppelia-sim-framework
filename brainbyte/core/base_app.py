@@ -20,6 +20,7 @@ import platform
 import shutil
 import keyboard
 from coppeliasim_zmqremoteapi_client import RemoteAPIClient
+from brainbyte.core.paths import *
 from brainbyte.sensors import *
 from brainbyte.robots import * 
 from brainbyte.utils.logging import setup_logger
@@ -87,9 +88,14 @@ class BaseApp:
             
             # Loop principal
             while (t := self.sim.getSimulationTime()) < self.sim_time:
-                if keyboard.is_pressed('s'):
-                    self.logger.warning(f"Simulation interrupted by user at t={t:.2f}s")
-                    break
+                try:
+                    if keyboard.is_pressed('s'):
+                        self.logger.warning(f"Simulation interrupted by user at t={t:.2f}s")
+                        break
+                except ImportError as e:
+                    # Pega erros caso a pessoa não tenha instalado ou não tenha permissão de root
+                    self.logger.error("Erro ao acessar o teclado (requer sudo no Linux/Mac). Pressione Ctrl+C para parar.")
+                    
                 self.loop(t)
                 self.client.step()
                 

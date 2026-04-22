@@ -4,7 +4,7 @@ from brainbyte.robots.base.base_bot import BaseBot
 class PioneerBot(BaseBot):
     """Controle específico para robô diferencial Pioneer P3DX."""
 
-    def __init__(self, sim, robot_name='PioneerP3DX'):
+    def __init__(self, sim, robot_name='PioneerP3DX', left_motor='leftMotor', right_motor='rightMotor'):
         super().__init__(sim, robot_name)
 
         # ==========================================
@@ -27,16 +27,22 @@ class PioneerBot(BaseBot):
         # ==========================================
         # CONFIGURAÇÃO DE JUNTAS / HANDLES NO SIMULADOR
         # ==========================================
+        # Lógica inteligente para o caminho:
+        # Se começar com '/' ou './', o usuário passou o caminho exato. Usa direto.
+        # Caso contrário, assume que é filho direto do robô e monta a string padrão.
+        path_left = left_motor if left_motor.startswith(('/', '.')) else f'/{robot_name}/{left_motor}'
+        path_right = right_motor if right_motor.startswith(('/', '.')) else f'/{robot_name}/{right_motor}'
+
         self.joints = {
-            'left_wheel': self.sim.getObject(f'/{robot_name}/leftMotor'),
-            'right_wheel': self.sim.getObject(f'/{robot_name}/rightMotor')
+            'left_wheel': self.sim.getObject(path_left),
+            'right_wheel': self.sim.getObject(path_right)
         }
 
         # Verificação de handles
         for name, handle in self.joints.items():
             if handle == -1:
-                raise ValueError(f"Junta '{name}' não encontrada no robô '{robot_name}'.")
-
+                raise ValueError(f"Junta '{name}' não encontrada no robô '{robot_name}'. Caminho buscado: {self.joints}")
+            
     # ==========================================
     # PROPRIEDADES INTEGRADAS AO COPPELIASIM
     # ==========================================

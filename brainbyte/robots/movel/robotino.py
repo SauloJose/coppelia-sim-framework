@@ -159,17 +159,22 @@ class Robotino(BaseBot):
         :param w0, w1, w2: Velocidades angulares das rodas (rad/s).
         :return: Array [vx, vy, omega] representando a velocidade resultante do robô.
         """
-        self._wheel_vels = np.array([w0, w1, w2])
+        # 1. Salva as velocidades angulares
+        self._wheel_vels = np.array([float(w0), float(w1), float(w2)])
         
+        # 2. Converte para lista nativa do Python (Evita erro CBOR do CoppeliaSim)
+        vels_nativas = self._wheel_vels.tolist()
+
         # Aplica a velocidade informada diretamente nos motores do simulador
-        self.sim.setJointTargetVelocity(self.joints['wheel0'], self._wheel_vels[0])
-        self.sim.setJointTargetVelocity(self.joints['wheel1'], self._wheel_vels[1])
-        self.sim.setJointTargetVelocity(self.joints['wheel2'], self._wheel_vels[2])
+        self.sim.setJointTargetVelocity(self.joints['wheel0'], vels_nativas[0])
+        self.sim.setJointTargetVelocity(self.joints['wheel1'], vels_nativas[1])
+        self.sim.setJointTargetVelocity(self.joints['wheel2'], vels_nativas[2])
         
         # Atualiza o estado interno (Direta) multiplicando a pseudo-inversa pelas velocidades das rodas
         self._robot_vel = self.H_inv @ self._wheel_vels
         
         return self._robot_vel
+    
     # ==========================================
     # CONTROLES GERAIS
     # ==========================================
@@ -183,12 +188,12 @@ class Robotino(BaseBot):
         self.joints['wheel1'] = self.sim.getObject(f'/{self.robot_name}/{self.w1_handle}')
         self.joints['wheel2'] = self.sim.getObject(f'/{self.robot_name}/{self.w2_handle}')
 
-    def set_velocities(self, v1, v2, v3):
-        """Seta as velocidades das rodas individualmente no simulador de forma manual."""
-        self._wheel_vels = np.array([v1, v2, v3])
-        self.sim.setJointTargetVelocity(self.joints['wheel0'], v1)
-        self.sim.setJointTargetVelocity(self.joints['wheel1'], v2)
-        self.sim.setJointTargetVelocity(self.joints['wheel2'], v3)
+    def set_velocities(self, w0, w1, w2):
+        """
+        Alias para direct_cin: Seta as velocidades angulares das rodas.
+        Mantido apenas por retrocompatibilidade caso outros scripts já o utilizem.
+        """
+        return self.direct_cin(w0, w1, w2)
 
     def stop(self):
         """Zera a velocidade de todos os motores, parando o robô."""

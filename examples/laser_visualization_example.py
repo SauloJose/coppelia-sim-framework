@@ -16,7 +16,7 @@ import logging
 
 from brainbyte import BaseApp
 from brainbyte.sensors import HokuyoSensorSim
-
+from brainbyte.robots.movel.pioneerBot import PioneerBot
 
 def draw_laser_data(laser_data, max_sensor_range=5, show=False, save_path=None):
     """Plots laser scan data in polar coordinates.
@@ -114,35 +114,21 @@ class LaserVisualizationExample(BaseApp):
         4. Pre-calculates kinematic constants (L, r)
         """
         self.logger.info("Configuring robot for laser visualization...")
-        self.robotname = 'PioneerP3DX'
-
-        # Get handles for robot and wheels
-        self.robotHandle = self.sim.getObject('/' + self.robotname)
-        self.l_wheel = self.sim.getObject('/' + self.robotname + '/leftMotor')
-        self.r_wheel = self.sim.getObject('/' + self.robotname + '/rightMotor')
-
-        # Verify handles are valid
-        bad = []
-        for name, h in (('robot', self.robotHandle), ('leftWheel', self.l_wheel), ('rightWheel', self.r_wheel)):
-            if h == -1:
-                bad.append(name)
-
-        if bad:
-            self.logger.error(f"Invalid handles: {bad}. Verify object names in scene.")
-            raise RuntimeError(f"Invalid handles: {bad}")
-        else:
-            self.logger.debug(f"Handles: robot={self.robotHandle}, left={self.l_wheel}, right={self.r_wheel}")
         
+        # Instancia o robô abstraindo handles e cinemática
+        self.robot = PioneerBot(
+            sim=self.sim, 
+            robot_name='PioneerP3DX',
+            left_motor='leftMotor',
+            right_motor='rightMotor'
+        )
+
         # Initialize sensor (don't read data yet, simulation hasn't started)
-        self.hokuyo_sensor = HokuyoSensorSim(self.sim, "/" + self.robotname + "/fastHokuyo")
+        self.hokuyo_sensor = HokuyoSensorSim(self.sim, "/PioneerP3DX/fastHokuyo")
 
-        # Get initial robot position
-        pos = self.sim.getObjectPosition(self.robotHandle, self.sim.handle_world)
-        self.logger.info(f'Initial robot position: {pos}')
-        
-        # Pioneer P3DX kinematics
-        self.L = 0.381   # Wheel base (meters)
-        self.r = 0.0975  # Wheel radius (meters)
+        # Get initial robot position directly from the bot properties
+        pos = self.robot.pose
+        self.logger.info(f'Initial robot position: x={pos[0]:.2f}, y={pos[1]:.2f}')
 
     def post_start(self):
         """Executed right after simulation starts.
@@ -158,42 +144,20 @@ class LaserVisualizationExample(BaseApp):
                 self.logger.exception("Automatic diagnostic failed")
 
     def diagnostic_pulse(self, duration=1.0, speed=0.6):
-        """Send velocity pulse to motors for hardware validation.
-
-        Args:
-            duration: Pulse duration (seconds)
-            speed: Linear velocity reference (m/s) - converted to wl/wr
-        
-        This method:
-        1. Calculates wheel velocities from linear/angular velocity
-        2. Sends pulse via motor commands
-        3. Ensures motors stop after pulse completes
-        """
-        if any(h == -1 for h in (self.l_wheel, self.r_wheel)):
-            self.logger.error("Cannot run diagnostic: invalid wheel handles")
-            return
-
-        # Calculate wl/wr for v=speed, w=0
-        v = float(speed)
-        w = 0.0
-        wl = v / self.r - (w * self.L) / (2 * self.r)
-        wr = v / self.r + (w * self.L) / (2 * self.r)
-
-        self.logger.debug(f"Diagnostic pulse: wl={wl:.3f}, wr={wr:.3f}, duration={duration}s")
-
+        """Send velocity pulse to motors for hardware validation."""
+        self.logger.debug(f"Diagnostic pulse: v={speed}, w=0.0, duration={duration}s")
         start = self.sim.getSimulationTime()
         try:
+            # Aplica velocidade linear usando a classe do robô
+            self.robot.set_wheel_velocity(speed, 0.0)
+            
             while (self.sim.getSimulationTime() - start) < duration:
-                self.sim.setJointTargetVelocity(self.l_wheel, wl)
-                self.sim.setJointTargetVelocity(self.r_wheel, wr)
                 # Step to advance simulation during pulse
                 self.sim.step()
-
         finally:
-            # Ensure motors stop
+            # Ensure motors stop safely using our abstract class
             try:
-                self.sim.setJointTargetVelocity(self.l_wheel, 0)
-                self.sim.setJointTargetVelocity(self.r_wheel, 0)
+                self.robot.stop()
             except Exception:
                 self.logger.exception("Failed to zero velocities after diagnostic")
             self.logger.info("Diagnostic complete: pulse finished")
@@ -261,19 +225,21 @@ class LaserVisualizationExample(BaseApp):
                 # Right is clearer, turn right (negative)
                 w = np.deg2rad(-40)
 
-        # Pioneer P3DX differential kinematics
-        wl = v / self.r - (w * self.L) / (2 * self.r)
-        wr = v / self.r + (w * self.L) / (2 * self.r)
-
-        # Send velocity commands to motors
-        self.logger.debug(f"Velocity command: wl={wl:.3f}, wr={wr:.3f}")
+        # Aplica velocidades usando a classe PioneerBot (ela cuida da matemática!)
         try:
-            self.sim.setJointTargetVelocity(self.l_wheel, wl)
-            self.sim.setJointTargetVelocity(self.r_wheel, wr)
+            self.robot.set_wheel_velocity(v, w)
+            wl, wr = self.robot.wheel_velocities
+            self.logger.debug(f"Velocity command: wl={wl:.3f}, wr={wr:.3f}")
         except Exception:
             self.logger.exception("Failed to apply velocities to motors.")
-        
 
+    def stop(self):
+        """Executed after the simulation finishes to ensure safe shutdown."""
+        self.logger.info("Simulation stopping. Halting robot...")
+        try:
+            self.robot.stop()
+        except Exception as e:
+            self.logger.warning(f"Error while stopping robot: {e}")
 def app():
     """Entry point expected by main.py.
 

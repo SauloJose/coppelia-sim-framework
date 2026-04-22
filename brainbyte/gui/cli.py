@@ -7,12 +7,8 @@ import textwrap
 from brainbyte.gui.auxF import * 
 
 from brainbyte.utils.logging import *  # Certifique-se de que este módulo existe
-
+from brainbyte.core.paths import *
 import traceback
-
-# Valores para ler logs
-LOG_BRAIN_FILE = 'brainbyte/logs/main.log'
-LOG_APP_FILE = 'brainbyte/logs/simulation.log'
 
 class brainGUI:
     def __init__(self):

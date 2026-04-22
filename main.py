@@ -15,8 +15,13 @@ from brainbyte.core import *
 
 if __name__ == "__main__":
     app = brainGUI()
-    app.run()
-
+    try:
+        app.run()
+    except KeyboardInterrupt:
+        print("\n[INFO] Interrupção pelo usuário detectada. Saindo graciosamente...")
+        # Opcional: forçar o stop se você tiver a instância da simulação acessível
+    except Exception as e:
+        print(f"Ocorreu um erro inesperado: {e}")
 
 
 

@@ -8,6 +8,7 @@ Exemplo de uso do framework CoppeliaSim que demonstra:
 """
 
 from brainbyte import BaseApp, Plot2D
+from brainbyte.robots.movel.pioneerBot import PioneerBot 
 import numpy as np
 
 
@@ -28,45 +29,29 @@ class LocomocaoTeste(BaseApp):
         """Configura recursos necessários antes da simulação começar."""
         self.logger.info("Configurando o robô para o teste...")
         
-        self.robotname = 'Pioneer_p3dx'
+        self.robot = PioneerBot(sim=self.sim, 
+                                robot_name='Pioneer_p3dx',
+                                left_motor="/Pioneer_p3dx_leftMotor",
+                                right_motor="/Pioneer_p3dx_rightMotor")
 
-        # Handles do robô e rodas
-        self.robotHandle = self.sim.getObject('/' + self.robotname)
-        self.l_wheel = self.sim.getObject('/' + self.robotname + '/'+self.robotname+'_leftMotor')
-        self.r_wheel = self.sim.getObject('/' + self.robotname + '/'+self.robotname+'_rightMotor')
-
-        # Verifica se os handles foram obtidos corretamente
-        bad = []
-        for name, h in (('robot', self.robotHandle), ('leftWheel', self.l_wheel), ('rightWheel', self.r_wheel)):
-            if h == -1:
-                bad.append(name)
-
-        if bad:
-            self.logger.error(f"Handles inválidos: {bad}. Verifique nomes dos objetos na cena e paths usados.")
-            raise RuntimeError(f"Handles inválidos: {bad}")
-        else:
-            self.logger.debug(f"Handles: robot={self.robotHandle}, left={self.l_wheel}, right={self.r_wheel}")
-        
         # Posição inicial do robô
-        pos = self.sim.getObjectPosition(self.robotHandle, self.sim.handle_world)
-        self.logger.info(f'Posição inicial do robô: {pos}')
+        pos = self.robot.pose
+        self.logger.info(f'Pose inicial do robô: x={pos[0]:.2f}, y={pos[1]:.2f}, theta={np.rad2deg(pos[2]):.2f}°')
         
-        # Parâmetros do Pioneer P3DX
-        self.L = 0.331       # Distância entre eixos (metros)
-        self.r = 0.09751     # Raio das rodas (metros)
+        # Limites dinâmicos da simulação
         self.v_max = 1.0     # Velocidade linear máxima (m/s)
         self.w_max = 2.0     # Velocidade angular máxima (rad/s)
 
-        # Velocidades atuais
+        # Variáveis de controle
         self.v = 0.0         # Velocidade linear (m/s)
         self.w = 0.0         # Velocidade angular (rad/s)
-        self.wl = 0.0        # Velocidade angular roda esquerda (rad/s)
-        self.wr = 0.0        # Velocidade angular roda direita (rad/s)
 
         # Trajetórias: real (da simulação) e referência (Lissajous)
-        pos_inicial = self.sim.getObjectPosition(self.robotHandle, self.sim.handle_world)
-        self.traj_real = [pos_inicial.copy()]      # Trajetória real do robô
-        self.traj_reference = [pos_inicial.copy()] # Trajetória de referência desejada
+        # Salvamos [x, y, 0.0] para manter o formato 3D caso o Plot2D exija
+        ponto_inicial = [pos[0], pos[1], 0.0]
+        self.traj_real = [ponto_inicial.copy()]      
+        self.traj_reference = [ponto_inicial.copy()]
+
 
     def generate_trajectory(self, t):
         """
@@ -117,11 +102,6 @@ class LocomocaoTeste(BaseApp):
         # Limitar velocidade angular a valores realistas
         self.w = np.clip(self.w, -self.w_max, self.w_max)
 
-        # Cinemática inversa: converter (v, w) para velocidades das rodas
-        # Para robô diferencial: wl = v/r - (w*L)/(2r), wr = v/r + (w*L)/(2r)
-        self.wl = self.v / self.r - (self.w * self.L) / (2 * self.r)
-        self.wr = self.v / self.r + (self.w * self.L) / (2 * self.r)
-
         # Armazenar referência para comparação posterior
         self.ref_pos = np.array([x_ref, y_ref, 0.0])
     
@@ -139,15 +119,16 @@ class LocomocaoTeste(BaseApp):
 
         # Enviar comandos de velocidade para os motores
         try:
-            self.sim.setJointTargetVelocity(self.l_wheel, self.wl)
-            self.sim.setJointTargetVelocity(self.r_wheel, self.wr)
-            self.logger.debug(f"Velocidades enviadas: wl={self.wl:.4f}, wr={self.wr:.4f} (v={self.v:.3f}, w={self.w:.3f})")
+            self.robot.set_wheel_velocity(self.v, self.w)
+
+            wl, wr = self.robot.wheel_velocities
+            self.logger.debug(f"Chassi: v={self.v:.3f}, w={self.w:.3f} | Rodas: wl={wl:.4f}, wr={wr:.4f}")
         except Exception as e:
             self.logger.error("Falha ao aplicar velocidades nas juntas.")
 
         # Obter e registrar posição real do robô
-        pos_real = self.sim.getObjectPosition(self.robotHandle, self.sim.handle_world)
-        self.traj_real.append(np.array(pos_real))
+        pos_real = self.robot.pose
+        self.traj_real.append([pos_real[0], pos_real[1], 0.0])
         
     def stop(self):
         """Executado após a simulação terminar."""
@@ -155,19 +136,15 @@ class LocomocaoTeste(BaseApp):
         
         # Parar os motores (segurança)
         try:
-            self.sim.setJointTargetVelocity(self.l_wheel, 0)
-            self.sim.setJointTargetVelocity(self.r_wheel, 0)
+            self.robot.stop()
         except Exception as e:
             self.logger.warning(f"Erro ao parar motores: {e}")
 
-        # Obter posição final real
-        pos_final = self.sim.getObjectPosition(self.robotHandle, self.sim.handle_world)
-        ori_final = self.sim.getObjectOrientation(self.robotHandle, self.sim.handle_world)
-        
-        self.logger.info(f"Posição final: {pos_final}")
-        self.logger.info(f"Orientação final: {np.rad2deg(ori_final)}")
+        # Lê a posição e orientação finais usando a propriedade simplificada
+        pos_final = self.robot.pose
+        self.logger.info(f"Posição/Orientação Final: x={pos_final[0]:.2f}, y={pos_final[1]:.2f}, theta={np.rad2deg(pos_final[2]):.2f}°")
 
-        # Plotar trajetória real (obtida da simulação)
+        # Plotar trajetória real 
         self.logger.info(f"Total de pontos registrados: {len(self.traj_real)}")
         Plot2D(
             self.traj_real, 

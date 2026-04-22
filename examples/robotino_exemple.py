@@ -13,7 +13,12 @@ class RobotinoSimu(BaseApp):
 
     def setup(self):
         """Configura os recurso da simulação"""
-        self.robotino = Robotino(sim=self.sim, robot_name='robotino')
+        self.logger.info("Configurando o robô e os sensores")
+        self.robot = Robotino(sim=self.sim, 
+                            robot_name='robotino')
+        
+        pos = self.robot.pose
+        self.logger.info(f'Initial robot position: x={pos[0]:.2f}, y={pos[1]:.2f}')
 
     def post_start(self):
         """ É executado logo quando inicia a simulação"""
@@ -22,14 +27,23 @@ class RobotinoSimu(BaseApp):
     def loop(self, t):
         """ Etapas do loop"""
         try:
-            i = 1
+            #Lógica de enviar velocidades
+            sim_t = self.sim.getSimulationTime()
+            if sim_t <= 10:
+                self.robot.set_velocity_rot([5,5], 0)
+            elif sim_t <= 30:
+                self.robot.direct_cin(10,-10,10)
+            else:
+                self.robot.direct_cin(10,-10,-10)
+
+            self.logger.debug(f"Velocidades da roda {self.robot._wheel_vels}")
         except Exception as e:
             self.logger.error(f"Erro: {e}")
 
     def stop(self):
         """ Executado após a simulação terminar - parada segura"""
         try:
-            alg = 0 
+            self.robot.stop()
         except Exception as e:
             self.logger.error(f"Erro detectado: {e}")
 
