@@ -128,25 +128,72 @@ class LDS_02(object):
 
 
 #class to cache data of the LiDar Sensor:
+# Vox grid (transformo os pontos em coordenadas de grade e só adiciono se estiverem próximos)
 class PointCloudAccumulator:
-    def __init__(self, max_point = None):
-        self._cache = np.empty((0,3))
-        self.max_points = max_point
+    def __init__(self, max_point = 100000, voxel_size = 0.005):
+        self._cache_list = []
+        self._total_count = 0 
 
+        self.max_points = max_point
+        self.voxel_size = voxel_size
+        self._occupied_voxels = set()
+
+    def _get_voxel_coords(self, points):
+        # Transforma coordenadas reais em índices inteiros de grade
+        return np.floor(points / self.voxel_size).astype(int)
+    
     def add(self, points: np.ndarray):
         if points.size == 0:
             return 0
-        self._cache = np.vstack([self._cache, points])
-        if self.max_points is not None and self._cache.shape[0] > self.max_points:
-            self._cache = self._cache[-self.max_points:]
+        
+        # Aplico a lógica do VOXEL
+        voxels = self._get_voxel_coords(points)
+
+        unique_mask = []
+        for i,v in enumerate(voxels):
+            v_tuple = (v[0], v[1], v[2])
+            if v_tuple not in self._occupied_voxels:
+                self._occupied_voxels.add(v_tuple)
+                unique_mask.append(i)
+
+        if not unique_mask:
+            return 
+        
+        new_pts =points[unique_mask]
+        self._cache_list.append(new_pts)
+        self._total_count += len(new_pts)
+
+        if self.max_points and self._total_count > self.max_points:
+            self._prune_cache()
 
     def get_all(self) -> np.ndarray:
-        return self._cache
+        if not self._cache_list:
+            return np.empty((0, 3))
+        return np.vstack(self._cache_list)
+
+    def _prune_cache(self):
+        """ Consolida e remove pontos antigos para evitar estouro de RAM """
+        full_cloud = self.get_all()
+        pruned_cloud = full_cloud[-self.max_points:]
+        
+        self._cache_list = [pruned_cloud]
+        self._total_count = len(pruned_cloud)
+        
+        # Reconstrói o set de voxels para refletir apenas os pontos que ficaram
+        voxels = self._get_voxel_coords(pruned_cloud)
+        self._occupied_voxels = set(tuple(v) for v in voxels)
 
     def clear(self):
         self._cache = np.empty((0, 3))
+        self._occupied_voxels.clear()
+
+    def _rebuild_voxel_set(self):
+        # Sincroniza o set com os pontos que sobraram no cache
+        voxels = self._get_voxel_coords(self._cache)
+        self._occupied_voxels = set(tuple(v) for v in voxels)
+
 
     @property
     def count(self):
-        return self._cache.shape[0]
+        return self._total_count
     

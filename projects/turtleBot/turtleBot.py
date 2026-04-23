@@ -64,7 +64,7 @@ class turtleBot(BaseApp):
         self.robot.add_sensor(sensor_name='LIDAR',sensor_instance=self.Lidar)
 
         # Controladores do robô
-        v_max = 0.1
+        v_max = 0.2
         w_max = np.deg2rad(20)
         self.control = KeyboardController(v_max=v_max, w_max=w_max)
 
@@ -77,7 +77,7 @@ class turtleBot(BaseApp):
         self.logger.info(f'Initial robot position: x={pos[0]:.2f}, y={pos[1]:.2f}')
 
         #Buffers para os pontos calculados
-        self.buffer = PointCloudAccumulator(max_point=10000)
+        self.buffer = PointCloudAccumulator(max_point=100000)
 
         self.logger.info(f"Robot configurated for a manual controller W-A-S-D with v_max = {v_max} and w_max = {w_max}...")
         
@@ -121,10 +121,10 @@ class turtleBot(BaseApp):
 
             #Puxa dados dos sensores e salva
             data_sensor = self.robot.get_sensor(sensor_name='LIDAR').update() #Puxando dados do LIDAR
-            self.buffer.add(data_sensor)
+            #self.buffer.add(data_sensor)
 
             # Atualiza plot do lidar
-            lx  = data_sensor[:,0]
+            lx = data_sensor[:,0]
             ly = data_sensor[:,1]
             self.plot_lidar.set_data(lx,ly)
             
@@ -144,9 +144,11 @@ class turtleBot(BaseApp):
         """ Executado após a simulação terminar - parada segura"""
         try:
             self.robot.stop()
-            
+
             plt.ioff()
             plt.close(self.fig)
+            self.logger.debug(f"Buffer Usage: {self.buffer._total_count}")
+            
         except Exception as e:
             # CHAVES DUPLAS AQUI:
             self.logger.error(f"Erro detected in stop(): {e}")
