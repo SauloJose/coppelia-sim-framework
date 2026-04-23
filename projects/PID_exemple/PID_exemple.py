@@ -1,6 +1,6 @@
 from brainbyte import BaseApp
 from brainbyte.robots.movel.Manta import Manta
-from brainbyte.control.control import * 
+from brainbyte.control.automatic import * 
 
 
 # Classe principal    

@@ -25,7 +25,7 @@ from brainbyte.sensors import *
 from brainbyte.robots import * 
 from brainbyte.utils.logging import setup_logger
 from brainbyte.utils import *
-
+import traceback
     
 class BaseApp:
     """Base class providing the minimal lifecycle for a simulation application.
@@ -41,7 +41,7 @@ class BaseApp:
         self.scene_file = scene_file
         self.sim_time = sim_time
 
-        # Configurar arquivo de log
+        # Configure log file
         if log_file is None:
             fd, log_file = tempfile.mkstemp(prefix='sim_log_', suffix='.log')
             os.close(fd)
@@ -72,19 +72,19 @@ class BaseApp:
             
         except Exception as e:
             self.logger.error("CONNECTION ERROR: Could not establish communication.")
-            self.logger.error(f"Details: {e}")
+            self.logger.exception(f"Error detected in __init__ BaseApp: Details: {e}")
             sys.exit(1)
 
     def run(self):
         try:
-            # Carregar cena
+            # Load scene
             if self.scene_file:
-                # Descobre o caminho absoluto do script que chamou o BaseApp (ex: seu_app.py)
+                # Find the absolute path of the script that called BaseApp (e.g., your_app.py)
                 try:
                     child_module = sys.modules[self.__class__.__module__]
                     base_dir = os.path.dirname(os.path.abspath(child_module.__file__))
                 except (KeyError, AttributeError):
-                    # Fallback de segurança
+                    # Safety fallback
                     base_dir = os.getcwd()
 
                 scene_path = os.path.join(base_dir, self.scene_file)
@@ -101,15 +101,15 @@ class BaseApp:
             self.sim.startSimulation()
             self.post_start()
             
-            # Loop principal
+            # Main loop
             while (t := self.sim.getSimulationTime()) < self.sim_time:
                 try:
-                    if keyboard.is_pressed('s'):
+                    if keyboard.is_pressed('x'):
                         self.logger.warning(f"Simulation interrupted by user at t={t:.2f}s")
                         break
                 except ImportError as e:
-                    # Pega erros caso a pessoa não tenha instalado ou não tenha permissão de root
-                    self.logger.error("Erro ao acessar o teclado (requer sudo no Linux/Mac). Pressione Ctrl+C para parar.")
+                    # Catch errors if the user lacks the module or root privileges
+                    self.logger.error("Error detected on Keyboard input (request sudo in Linux/Mac). Press Ctrl+C to stop.")
                     
                 self.loop(t)
                 self.client.step()
@@ -117,29 +117,31 @@ class BaseApp:
         except KeyboardInterrupt:
             self.logger.warning("Simulation manually interrupted from terminal.")
         except Exception as e:
-            self.logger.error(f"Unexpected error: {e}", exc_info=True)
-        finally:
-            self.logger.info("Stopping simulation...")
+            msg = traceback.format_exc()
+            self.logger.exception(f"Unexpected error in run() from BaseApp: {e}\n => Traceback: \n\n{msg}")
+
+        finally:    
+            self.logger.info("Stopping simulation in finally...")
             self.stop()
             self.sim.stopSimulation()
             
-            # Limpar arquivo temporário, se usado
+            # Clean up temporary file, if used
             if self._temp_log_file and os.path.exists(self._temp_log_file):
                 try:
                     os.remove(self._temp_log_file)
                 except OSError:
                     pass
     
-    # Puxar informações padrões 
+    # Fetch standard information 
     def d_time(self):
         """
-        retorna o intervalo de tempo da simulação
+        Returns the simulation time step.
         """
         return self.sim.getSimulationTimeStep()
     
     def simu_time(self):
         """
-        retorna o tempo atual da simulação
+        Returns the current simulation time.
         """
         return self.sim.getSimulationTime()
     

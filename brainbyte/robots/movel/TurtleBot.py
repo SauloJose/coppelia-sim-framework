@@ -5,15 +5,17 @@ class TurtleBot(BaseBot):
     """Controle específico para robô diferencial Turtle Bot."""
 
     def __init__(self, sim, 
-                 robot_name='turtleBot', 
-                 left_motor='left_Motor', 
-                 right_motor='right_Motor'
+                 robot_name = 'Turtlebot3', 
+                 left_motor = 'left_Motor', 
+                 right_motor= 'right_Motor',
+                 base_link  = 'base_link'
                  ):
         super().__init__(sim, robot_name)
-
         
-        # ESTADOS INTERNOS
-        
+        #New handle 
+        self.robot_handle = self.sim.getObject(f'/{robot_name}/{base_link}')
+    
+        # ESTADOS INTERNO
         self._robot_vel = np.zeros(2)     # [v, omega] (linear em X, angular em Z)
         self._wheel_vels = np.zeros(2)    # [wl, wr] em rad/s (roda esquerda, roda direita)
         

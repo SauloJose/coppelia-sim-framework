@@ -9,6 +9,7 @@ from brainbyte.gui.auxF import *
 from brainbyte.utils.logging import *  # Certifique-se de que este módulo existe
 from brainbyte.core.paths import *
 import traceback
+import msvcrt
 
 class brainGUI:
     def __init__(self):
@@ -340,7 +341,7 @@ class brainGUI:
             self.banner()
 
             if hasattr(module, 'app'):
-                fox_print(f"O projeto '{selected}' foi iniciado. Para pausar ou cancelar clique em 'ctrl+c' ou 's'.", width=45)
+                fox_print(f"O projeto '{selected}' foi iniciado. Para pausar ou cancelar clique em 'ctrl+c' ou 'x'.", width=45)
                 try:
                     module.app()
                 except Exception as e:
@@ -352,6 +353,8 @@ class brainGUI:
             else:
                 fox_print(f"Erro: O arquivo '{selected}.py' não contém a função 'app()'.", width=45)
                 get_key()
+
+            msvcrt.getch()
                 
         except Exception as e:
             fox_print(f"Erro ao carregar módulo: {type(e).__name__}: {e}", width=50)

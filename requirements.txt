@@ -1,0 +1,7 @@
+coppeliasim_zmqremoteapi_client==2.0.4
+keyboard==0.13.5
+matplotlib==3.10.8
+numba==0.65.0
+numpy==2.4.4
+pynput==1.8.1
+setuptools==76.0.0

@@ -14,26 +14,29 @@ class {name_app}(BaseApp):
 
     def setup(self):
         """Configura os recurso da simulação"""
-        self.logger.info("Configurando o robô e os sensores")
+        try:
+            self.logger.info("Configuring Robot, Sensor and Controllers...")
 
-        # Exemplo de adicionar um robô
-        # self.robot = Manta(sim=self.sim,
-                           # robot_name="Manta",
-                           # steer_name="steer_joint",
-                           # motor_name="motor_joint",
-                           # max_steer=np.deg2rad(10),
-                           # max_velocity=20)
-        
-        self.dt = self.d_time()
-        #pos = self.robot.pose
-        # CHAVES DUPLAS AQUI:
-        #self.logger.info(f'Initial robot position: x={{pos[0]:.2f}}, y={{pos[1]:.2f}}')
-        
-        
-        # Defina um controlador para adicionar aqui
-        #self.robot.add_control(control_name="PID",
-                               #control_instance=self.PID) 
-
+            # Exemplo de adicionar um robô
+            # self.robot = Manta(sim=self.sim,
+                            # robot_name="Manta",
+                            # steer_name="steer_joint",
+                            # motor_name="motor_joint",
+                            # max_steer=np.deg2rad(10),
+                            # max_velocity=20)
+            
+            self.dt = self.d_time()
+            #pos = self.robot.pose
+            # CHAVES DUPLAS AQUI:
+            #self.logger.info(f'Initial robot position: x={{pos[0]:.2f}}, y={{pos[1]:.2f}}')
+            
+            
+            # Defina um controlador para adicionar aqui
+            #self.robot.add_control(control_name="PID",
+                                #control_instance=self.PID) 
+        except Exception as e:
+            self.logger.error(f"Error detected in setup(): {{e}}")
+            
     def post_start(self):
         """ É executado logo quando inicia a simulação"""
         return super().post_start()
@@ -45,7 +48,7 @@ class {name_app}(BaseApp):
             pass 
         except Exception as e:
             # CHAVES DUPLAS AQUI:
-            self.logger.error(f"Erro: {{e}}")
+            self.logger.error(f"Error detected in loop(): {{e}}")
 
     def stop(self):
         """ Executado após a simulação terminar - parada segura"""
@@ -53,7 +56,7 @@ class {name_app}(BaseApp):
             self.robot.stop()
         except Exception as e:
             # CHAVES DUPLAS AQUI:
-            self.logger.error(f"Erro detectado: {{e}}")
+            self.logger.error(f"Error detected in stop(): {{e}}")
 
 def app():
     """
