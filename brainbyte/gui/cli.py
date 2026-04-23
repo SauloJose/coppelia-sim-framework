@@ -30,15 +30,15 @@ class brainGUI:
         term_width = shutil.get_terminal_size().columns
         
         title_lines = [
-
             "██████╗ ██████╗  █████╗ ██╗███╗   ██╗██████╗ ██╗   ██╗████████╗███████╗",
             "██╔══██╗██╔══██╗██╔══██╗██║████╗  ██║██╔══██╗╚██╗ ██╔╝╚══██╔══╝██╔════╝",
-            "██████╔╝██████╔╝███████║██║██╔██╗ ██║██████╔╝ ╚████╔╝    ██║   ███████╗",
-            "██╔══██╗██╔══██╗██╔══██║██║██║╚██╗██║██╔══██╗  ╚██╔╝     ██║   ╚════██║",
-            "██████╔╝██║  ██║██║  ██║██║██║ ╚████║██████╔╝   ██║      ██║   ███████║",
+            "██████╔╝██████╔╝███████║██║██╔██╗ ██║██████╔╝ ╚████╔╝    ██║   █████╗  ",
+            "██╔══██╗██╔══██╗██╔══██║██║██║╚██╗██║██╔══██╗  ╚██╔╝     ██║   ██╔══╝  ",
+            "██████╔╝██║  ██║██║  ██║██║██║ ╚████║██████╔╝   ██║      ██║   ███████╗",
             "╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝╚═════╝    ╚═╝      ╚═╝   ╚══════╝",
             "Por: Saulo José",
         ]
+
         max_title_len = max(len(line) for line in title_lines)
         
         subtitle = "Robotics  Manager  |  Script Organization & LLMs  |  Windows/Linux"
@@ -123,7 +123,7 @@ class brainGUI:
             sys.stdout.flush()
     
     def _ler_arquivo_log(self, caminho_log):
-        """Lê e retorna as últimas 20 linhas de um arquivo de log específico."""
+        """Lê e retorna as últimas 30 linhas de um arquivo de log específico."""
         log_path = Path(caminho_log)
         
         if not log_path.exists():
@@ -135,8 +135,8 @@ class brainGUI:
                 if not linhas:
                     return "O arquivo de log está vazio no momento."
                 else:
-                    # Pega as últimas 20 linhas
-                    ultimas_linhas = linhas[-20:]
+                    # Pega as últimas 30 linhas
+                    ultimas_linhas = linhas[-30:]
                     return "".join(ultimas_linhas)
         except Exception as e:
             return f"Erro ao tentar ler o arquivo de log:\n{e}"
@@ -146,6 +146,7 @@ class brainGUI:
         opcoes_logs = [
             "Log do Sistema",
             "Log da Simulação",
+            "Limpar todos os logs",
             "Voltar"
         ]
         
@@ -157,16 +158,44 @@ class brainGUI:
                 subtitulo="Selecione a origem dos logs"
             )
             
-            if escolha == -1 or escolha == 2:  # Voltar ou pressionou 'q'
+            if escolha == -1 or escolha == 3:  # Voltar ou pressionou 'q'
                 break
             elif escolha == 0:
                 # Log principal do sistema
                 conteudo = self._ler_arquivo_log(LOG_BRAIN_FILE)
                 self._exibir_texto_com_raposa("Log do Sistema (main.log)", conteudo)
             elif escolha == 1:
-                # Log da simulação (ATENÇÃO: Ajuste o nome do arquivo se o seu for diferente)
+                # Log da simulação
                 conteudo = self._ler_arquivo_log(LOG_APP_FILE)
                 self._exibir_texto_com_raposa("Log da Simulação", conteudo)
+            elif escolha == 2:
+                # Menu de confirmação (Y/N) usando a própria interface do sistema
+                opcoes_confirmacao = ["Sim (Y) - Apagar tudo", "Não (N) - Cancelar"]
+                confirmacao = self._menu_navegavel(
+                    "CONFIRMAÇÃO",
+                    opcoes_confirmacao,
+                    msg_raposa="Deseja mesmo apagar todos os logs?\nEsta ação não poderá ser desfeita.",
+                    subtitulo="Atenção!"
+                )
+                
+                if confirmacao == 0:  # Escolheu Sim
+                    try:
+                        for log_file in [LOG_BRAIN_FILE, LOG_APP_FILE]:
+                            log_path = Path(log_file)
+                            if log_path.exists():
+                                # Abrir em modo 'w' apaga o conteúdo do arquivo
+                                with open(log_path, 'w', encoding='utf-8') as f:
+                                    pass 
+                        self._exibir_texto_com_raposa(
+                            "Logs Limpos", 
+                            "Todos os registros de log foram apagados com sucesso!"
+                        )
+                    except Exception as e:
+                        self._exibir_texto_com_raposa(
+                            "Erro ao Limpar Logs", 
+                            f"Não foi possível limpar os arquivos:\n{e}"
+                        )
+                # Se escolher 1 (Não) ou -1 (voltar), o if é ignorado e ele simplesmente volta ao menu de logs.
 
     def _menu_configuracoes(self):
         """Submenu de configurações com checkboxes sem flick na tela."""
@@ -254,63 +283,368 @@ class brainGUI:
         get_key()  # aguarda
 
     # ---------- Funcionalidades originais ----------
-    def _list_examples(self):
-        if not self.examples_folder.exists() or not self.examples_folder.is_dir():
-            self.logger.warning("A pasta 'examples' não foi encontrada.")
+    def _list_projects(self):
+        """Lista as subpastas em 'projects/' que contêm um script .py correspondente"""
+        # Certifique-se que self.projects_folder aponta para a pasta 'projects'
+        target_dir = Path.cwd() / "projects"
+        
+        if not target_dir.exists() or not target_dir.is_dir():
+            self.logger.warning("A pasta 'projects' não foi encontrada.")
             return []
-        examples = []
-        for file in self.examples_folder.glob("*.py"):
-            name = file.stem
-            if name != "__init__" and not name.startswith("."):
-                examples.append(name)
-        return sorted(examples)
+            
+        projects = []
+        # Varre todos os itens dentro de projects/
+        for item in target_dir.iterdir():
+            # Critérios: É uma pasta? Não é oculta?
+            if item.is_dir() and not item.name.startswith((".", "__")):
+                # Verifica se existe o script .py com o mesmo nome da pasta lá dentro
+                script_file = item / f"{item.name}.py"
+                if script_file.exists():
+                    projects.append(item.name)
+                    
+        return sorted(projects)
 
-    def _choose_example(self):
-        """Menu de seleção de exemplos (navegável)"""
-        self.examples_list = self._list_examples()
-        if not self.examples_list:
-            fox_print("Nenhum exemplo encontrado na pasta 'examples/'.", width=40)
+    def _choose_project(self):
+        """Menu de seleção de projetos dentro da pasta 'projects/'"""
+        # Agora chamamos o método atualizado que lista pastas
+        self.projects_list = self._list_projects() 
+        
+        if not self.projects_list:
+            fox_print("Nenhum projeto encontrado na pasta 'projects/'.", width=40)
             get_key()
             return
         
-        opcoes = self.examples_list + ["Voltar"]
+        opcoes = self.projects_list + ["Voltar"]
         idx = self._menu_navegavel(
             "INICIAR SIMULAÇÃO",
             opcoes,
-            msg_raposa="Escolha um exemplo para executar.",
-            subtitulo=f"{len(self.examples_list)} exemplos disponíveis"
+            msg_raposa="Escolha um projeto para executar.",
+            subtitulo=f"{len(self.projects_list)} projetos disponíveis"
         )
-        if idx is None or idx == -1 or idx == len(self.examples_list):
+        
+        if idx is None or idx == -1 or idx == len(self.projects_list):
             return
-        selected = self.examples_list[idx]
-        self.logger.info(f"Iniciando exemplo: {selected}")
+            
+        selected = self.projects_list[idx]
+        self.logger.info(f"Iniciando projeto: {selected}")
+        
         try:
-            module = importlib.import_module(f"examples.{selected}")
+            # LÓGICA DE IMPORTAÇÃO: projects.NomeDaPasta.NomeDoArquivo
+            # Ex: projects.MeuRobo.MeuRobo
+            module_path = f"projects.{selected}.{selected}"
+            module = importlib.import_module(module_path)
 
-            # --- MODIFICAÇÃO AQUI ---
-            # Limpa a tela para apagar o menu anterior
+            importlib.reload(module) 
+            
             os.system('cls' if os.name == 'nt' else 'clear')
-            # Exibe o banner no topo
             self.banner()
 
             if hasattr(module, 'app'):
-                fox_print(f"O exemplo '{selected}' foi iniciado. Para pausar ou cancelar clique em 'ctrl+c' ou 's'. ", width=40)
+                fox_print(f"O projeto '{selected}' foi iniciado. Para pausar ou cancelar clique em 'ctrl+c' ou 's'.", width=45)
                 try:
                     module.app()
                 except Exception as e:
                     print("\n" + "="*50)
-                    print("💥 ERRO FATAL CAPTURADO:")
+                    print("💥 ERRO FATAL NO PROJETO:")
                     traceback.print_exc()
                     print("="*50 + "\n")
-                    input("Pressione ENTER para sair...") # Pausa a tela para você conseguir ler
+                    input("Pressione ENTER para voltar ao menu...")
             else:
-                fox_print(f"O exemplo '{selected}' não tem função 'app()'.", width=40)
+                fox_print(f"Erro: O arquivo '{selected}.py' não contém a função 'app()'.", width=45)
                 get_key()
+                
         except Exception as e:
-            fox_print(f"Erro: {type(e).__name__}: {e}", width=50)
+            fox_print(f"Erro ao carregar módulo: {type(e).__name__}: {e}", width=50)
             get_key()
 
-    def _generate_tree(self, directory: Path, prefix: str = "", max_depth: int = 3, current_depth: int = 0) -> str:
+            
+    def _create_new_simulation(self):
+        """Coleta dados do usuário e gera a pasta do projeto com os scripts e cena."""
+        import platform
+        import subprocess
+        from coppeliasim_zmqremoteapi_client import RemoteAPIClient
+        
+        os.system('cls' if os.name == 'nt' else 'clear')
+        self.banner()
+        print(fox_say("Vamos criar uma nova simulação! Preencha os dados abaixo.", width=65))
+        print("\n" + "\033[90m" + "─" * 70 + "\033[0m")
+        
+        # Ocultar o cursor no menu navegável é ótimo, mas aqui precisamos dele para o usuário digitar!
+        sys.stdout.write('\033[?25h')
+        sys.stdout.flush()
+
+        try:
+            # 1. Coleta os inputs
+            nome_aplicacao = input("\033[92m> \033[0mNome da aplicação (ex: MeuRobo): ").strip()
+            if not nome_aplicacao:
+                self._exibir_texto_com_raposa("Aviso", "A criação foi cancelada (nome vazio).")
+                return
+
+            tempo_simulacao = input("\033[92m> \033[0mTempo de simulação (em segundos): ").strip()
+            nome_cena = input("\033[92m> \033[0mNome da cena (ex: cena_basica): ").strip()
+
+            # 2. Prepara os caminhos e remove espaços/extensões
+            nome_aplicacao_limpo = nome_aplicacao.replace('.py', '').replace(' ', '')
+            nome_cena_limpo = nome_cena.replace('.ttt', '').replace(' ', '_')
+
+            base_dir = Path.cwd()
+            
+            # Caminhos dos templates
+            template_app = base_dir / "brainbyte" / "utils" / "basics" / "app.txt"
+            template_scene = base_dir / "brainbyte" / "utils" / "basics" / "scene.ttt"
+            
+            # Caminhos de destino
+            projects_dir = base_dir / "projects"
+            sim_folder = projects_dir / nome_aplicacao_limpo
+            
+            # Garante que as pastas existam
+            sim_folder.mkdir(parents=True, exist_ok=True)
+
+            arquivo_py = f"{nome_aplicacao_limpo}.py"
+            arquivo_ttt = f"{nome_cena_limpo}.ttt"
+
+            caminho_novo_app = sim_folder / arquivo_py
+            caminho_nova_cena = sim_folder / arquivo_ttt
+
+            # 3. Gera o arquivo .py usando o template
+            if not template_app.exists():
+                raise FileNotFoundError(f"Template de app não encontrado: {template_app}")
+                
+            with open(template_app, 'r', encoding='utf-8') as f:
+                conteudo_template = f.read()
+
+            conteudo_final = conteudo_template.format(
+                name_app=nome_aplicacao_limpo,
+                simulation_time=tempo_simulacao,
+                name_scene=nome_cena_limpo
+            )
+
+            with open(caminho_novo_app, 'w', encoding='utf-8') as f:
+                f.write(conteudo_final)
+
+            # 4. Copia e renomeia o template da cena
+            if not template_scene.exists():
+                raise FileNotFoundError(f"Template de cena não encontrado: {template_scene}")
+                
+            shutil.copy2(template_scene, caminho_nova_cena)
+
+            # 5. Feedback de sucesso e fala da raposa
+            mensagem_sucesso = (
+                f"Simulação criada com sucesso!\n\n"
+                f"📁 Projeto salvo em: projects/{nome_aplicacao_limpo}/\n"
+                f"📄 Script principal: {arquivo_py}\n"
+                f"📄 Cena do Coppelia: {arquivo_ttt}\n\n"
+                f"O arquivo criado irá abrir para edições!" # <--- A raposa fala aqui
+            )
+            self._exibir_texto_com_raposa("Sucesso!", mensagem_sucesso)
+
+            # 6. Abre o arquivo .py no editor padrão do sistema
+            path_py_str = str(caminho_novo_app.resolve())
+            try:
+                if platform.system() == 'Windows':
+                    os.startfile(path_py_str)
+                elif platform.system() == 'Darwin': # macOS
+                    subprocess.call(('open', path_py_str))
+                else: # Linux
+                    subprocess.call(('xdg-open', path_py_str))
+            except Exception as e:
+                self.logger.warning(f"Não foi possível abrir o arquivo automaticamente: {e}")
+
+            # 7. Carrega a cena no CoppeliaSim silenciosamente (sem dar run)
+            try:
+                client = RemoteAPIClient()
+                sim = client.require('sim')
+                # O CoppeliaSim precisa do caminho absoluto para carregar a cena corretamente
+                path_cena_str = str(caminho_nova_cena.resolve())
+                sim.loadScene(path_cena_str)
+                self.logger.info(f"Cena {arquivo_ttt} carregada no CoppeliaSim com sucesso.")
+            except Exception as e:
+                # Se o Coppelia não estiver aberto, ele avisa no log sem quebrar a criação
+                self.logger.warning(f"CoppeliaSim não parece estar aberto para carregar a cena. Erro: {e}")
+
+        except Exception as e:
+            self.logger.error(f"Erro ao criar simulação: {e}")
+            self._exibir_texto_com_raposa(
+                "Erro Crítico", 
+                f"Não foi possível criar a simulação:\n{e}"
+            )
+        finally:
+            # Esconde o cursor de volta pro menu continuar limpo
+            sys.stdout.write('\033[?25l')
+            sys.stdout.flush()
+    # ---------- Funcionalidade para navegar no projeto ---------
+    def _navegate_project(self):
+        """
+        Navegador interativo de arquivos estilo terminal.
+        Exibe a árvore com profundidade 1 e aceita comandos.
+        """
+
+        # Ponto de partida virtual
+        self.current_nav_path = Path.cwd().resolve()
+
+        os.system('cls' if os.name == 'nt' else 'clear')
+        self.banner()
+        print(fox_say("Navegador de projeto. Digite 'help' para ver comandos."))
+
+        # Loop principal do navegador
+        while True:
+            # Exibe caminho atual e árvore
+            print(f"\n\033[1;96m📁 {self.current_nav_path}\033[0m")
+            tree = self._generate_tree(self.current_nav_path, max_depth=1)
+            if tree.strip():
+                print(tree)
+            else:
+                print("   (pasta vazia)")
+            
+            # Prompt de comando
+            cmd_input = input("\n\033[92m> \033[0m").strip()
+            if not cmd_input:
+                continue
+            
+            parts = cmd_input.split(maxsplit=1)
+            command = parts[0].lower()
+            arg = parts[1] if len(parts) > 1 else ""
+            
+            if command in ("exit", "q", "quit"):
+                break
+            elif command == "help":
+                self._show_nav_help()
+            elif command in ("ls", "dir", "tree"):
+                # Apenas reexibe (já mostramos acima, mas podemos forçar)
+                continue
+            elif command == "cd":
+                self._nav_change_directory(arg)
+            elif command == "open":
+                self._nav_open_file(arg)
+            elif command == "del":
+                self._nav_del_file(arg)
+            else:
+                print(fox_say(f"Comando desconhecido: '{command}'. Digite 'help'.", width=50))
+            
+            # Limpa a tela para próxima iteração (opcional, para manter a navegação limpa)
+            # Se quiser manter histórico, remova os clears abaixo.
+            os.system('cls' if os.name == 'nt' else 'clear')
+            self.banner()
+            print(fox_say("Navegador de projeto. Digite 'help' para ver comandos."))
+
+    def _show_nav_help(self):
+        help_text = """
+        Comandos disponíveis:
+        \ncd <pasta>     - Entra na pasta especificada 
+        \nopen <arquivo> - Abre o arquivo no editor padrão do sistema
+        \nls / tree      - Reexibe a estrutura da pasta atual
+        \nhelp           - Mostra esta ajuda
+        \nexit / q       - Sai do navegador e volta ao menu principal
+        \ndel            - deleta uma arquivo
+        """
+        print(fox_say(help_text, width=60))
+        input("\nPressione ENTER para continuar...")
+    
+    def _nav_change_directory(self, arg):
+        if not arg:
+            print("Uso: cd <pasta>")
+            input("Pressione ENTER...")
+            return
+        
+        # Trata caminhos absolutos ou relativos
+        new_path = (self.current_nav_path / arg).resolve()
+        
+        if not new_path.exists():
+            print(f"A pasta '{arg}' não existe.")
+            input("Pressione ENTER...")
+            return
+        if not new_path.is_dir():
+            print(f"'{arg}' não é uma pasta.")
+            input("Pressione ENTER...")
+            return
+        
+        # Verifica permissão de leitura
+        if not os.access(new_path, os.R_OK):
+            print(f"Sem permissão para acessar '{arg}'.")
+            input("Pressione ENTER...")
+            return
+        
+        self.current_nav_path = new_path
+
+    def _nav_del_file(self, arg):
+        """ Definindo função para apagar o arquivo ou pasta de projeto"""
+        import shutil  # Recomendo colocar esse import lá no topo do seu script
+
+        if not arg:
+            print("Uso: del <arquivo_ou_pasta>")
+            input("Pressione ENTER...")
+            return
+        
+        target_path = (self.current_nav_path / arg).resolve()
+
+        if not target_path.exists():
+            print(f"Arquivo ou pasta '{arg}' não encontrado.")
+            input("Pressione ENTER...")
+            return
+        
+        # Tela de confirmação
+        print(f"\n⚠️  AVISO: Você está prestes a apagar permanentemente '{arg}'.")
+        if target_path.is_dir():
+            print("Isso apagará a pasta inteira e TODOS os arquivos da simulação dentro dela!")
+        
+        confirmacao = input("Tem certeza absoluta que deseja continuar? (s/n): ").strip().lower()
+
+        if confirmacao != 's':
+            print("Operação de exclusão cancelada. Ufa! 🦊")
+            input("Pressione ENTER para voltar...")
+            return
+        
+        # Executa a exclusão
+        try:
+            if target_path.is_file():
+                target_path.unlink()  # Deleta arquivo único
+                print(f"Arquivo '{target_path.name}' apagado com sucesso.")
+            elif target_path.is_dir():
+                shutil.rmtree(target_path)  # Deleta a pasta e tudo o que tem dentro
+                print(f"Projeto '{target_path.name}' deletado com sucesso.")
+            
+            input("Pressione ENTER...")
+        except Exception as e:
+            print(f"Erro ao tentar apagar: {e}")
+            input("Pressione ENTER...")
+
+    def _nav_open_file(self, arg):
+        if not arg:
+            print("Uso: open <arquivo>")
+            input("Pressione ENTER...")
+            return
+        
+        file_path = (self.current_nav_path / arg).resolve()
+        
+        if not file_path.exists():
+            print(f"Arquivo '{arg}' não encontrado.")
+            input("Pressione ENTER...")
+            return
+        if not file_path.is_file():
+            print(f"'{arg}' não é um arquivo.")
+            input("Pressione ENTER...")
+            return
+        
+        # Abre com editor padrão do sistema
+        try:
+            if os.name == 'nt':  # Windows
+                os.startfile(file_path)
+            elif os.name == 'posix':  # Linux/Mac
+                import subprocess
+                subprocess.run(['xdg-open', str(file_path)], check=True)
+            else:
+                print("Sistema operacional não suportado para abertura automática.")
+                input("Pressione ENTER...")
+                return
+            
+            print(f"Arquivo '{file_path.name}' aberto no editor externo.")
+            print("⚠️  Modifique e salve o arquivo normalmente. Ao fechar o editor, você retornará ao navegador.")
+            input("Pressione ENTER quando terminar...")
+        except Exception as e:
+            print(f"Erro ao abrir o arquivo: {e}")
+            input("Pressione ENTER...")
+
+    def _generate_tree(self, directory: Path, prefix: str = "", max_depth: int = 2, current_depth: int = 0) -> str:
         """Gera uma representação em árvore do diretório especificado."""
         if current_depth >= max_depth:
             return ""
@@ -322,7 +656,7 @@ class brainGUI:
             return f"{prefix}[Permissão negada]\n"
         
         # Filtra itens que não queremos mostrar
-        ignore_patterns = {'__pycache__', '.git', '.venv', 'venv', 'env', '.idea', '.vscode', 'node_modules', 'build', 'dist'}
+        ignore_patterns = {'__init__.py','config.json','pyproject.toml','setup.py','requirements.txt','requirements-dev.txt', '__pycache__', '.git', '.venv', 'venv', 'env', '.idea', '.vscode', 'node_modules', 'build', 'dist'}
         filtered_items = [item for item in items if item.name not in ignore_patterns and not item.name.startswith('.')]
         
         for i, item in enumerate(filtered_items):
@@ -351,14 +685,15 @@ class brainGUI:
             # de forma inteligente ao montar a tela, evitando piscar ao voltar das opções.
             
             opcoes_principal = [
-                "Iniciar simulação",
-                "Ajuda",
-                "Comandos",
-                "Estrutura das pastas",
-                "Sobre o sistema",
-                "Configurações",
-                "Ver Logs",
-                "Sair"
+                "Iniciar simulação",      # 0
+                "Criar nova simulação",   # 1 <-- Nova opção inserida aqui
+                "Navegar pelo projeto",   # 2
+                "Comandos",               # 3
+                "Ver Logs",               # 4
+                "Configurações",          # 5
+                "Ajuda",                  # 6
+                "Sobre o sistema",        # 7
+                "Sair"                    # 8
             ]
             escolha = self._menu_navegavel(
                 "MENU PRINCIPAL",
@@ -367,25 +702,24 @@ class brainGUI:
                 subtitulo=None
             )
             
-            if escolha == -1 or escolha == 7:  # Sair
+            if escolha == -1 or escolha == 8:  # Sair
                 # Limpa a tela para a despedida ficar limpa
                 os.system('cls' if os.name == 'nt' else 'clear')
                 self.banner()
                 print(fox_say("Até logo! Foi bom ajudar você.", width=40))
                 break
-            elif escolha == 0:
-                self._choose_example()
-            elif escolha == 1:
-                self._exibir_texto_com_raposa(
-                    "Ajuda",
-                    "Aqui você encontra ajuda sobre as funcionalidades.\n"
-                    "- Iniciar simulação: execute exemplos pré-programados.\n"
-                    "- Comandos: lista de comandos disponíveis.\n"
-                    "- Estrutura: mostra como o projeto está organizado.\n"
-                    "- Configurações: ajuste opções do sistema.\n"
-                    "- Ver Logs: exibe os últimos registros de execução."
-                )
-            elif escolha == 2:
+            elif escolha == 0: # Inicia simulação
+                self._choose_project()
+            elif escolha == 1: # Criar nova simulação (Em desenvolvimento)
+                '''self._exibir_texto_com_raposa(
+                    "Criar Nova Simulação",
+                    "Módulo em desenvolvimento...\n"
+                    "Em breve você poderá projetar novas simulações a partir daqui!"
+                )'''
+                self._create_new_simulation()
+            elif escolha == 2: # Navegar pelo projeto
+                self._navegate_project()
+            elif escolha == 3: # Comandos
                 self._exibir_texto_com_raposa(
                     "Comandos Disponíveis",
                     "COMANDOS (a implementar):\n"
@@ -393,11 +727,22 @@ class brainGUI:
                     "  > llm <prompt>   - consulta um modelo de linguagem\n"
                     "  > status         - mostra estado da infraestrutura"
                 )
-            elif escolha == 3:
-                root_path = Path.cwd()
-                tree_str = f"{root_path.name}\n" + self._generate_tree(root_path, max_depth=3)
-                self._exibir_texto_com_raposa("Estrutura do Projeto (Profundidade 3)", tree_str)
-            elif escolha == 4:
+            elif escolha == 4:  # Ver Logs
+                self._menu_logs()
+            elif escolha == 5: # Configurações
+                self._menu_configuracoes()
+            elif escolha == 6: # Ajuda
+                self._exibir_texto_com_raposa(
+                    "Ajuda",
+                    "Aqui você encontra ajuda sobre as funcionalidades.\n"
+                    "- Iniciar simulação: execute exemplos pré-programados.\n"
+                    "- Criar nova simulação: crie suas próprias simulações.\n"
+                    "- Comandos: lista de comandos disponíveis.\n"
+                    "- Estrutura: mostra como o projeto está organizado.\n"
+                    "- Configurações: ajuste opções do sistema.\n"
+                    "- Ver Logs: exibe os últimos registros de execução."
+                )
+            elif escolha == 7: # Sobre o projeto
                 self._exibir_texto_com_raposa(
                     "Sobre o BRAINBYTE",
                     "BRAINBYTE - Gerenciador de Infraestrutura de Robótica\n\n"
@@ -407,7 +752,3 @@ class brainGUI:
                     "• Configurações flexíveis (CLI/ROS)\n"
                     "• Estrutura modular pronta para expansão"
                 )
-            elif escolha == 5:
-                self._menu_configuracoes()
-            elif escolha == 6:  # <-- CHAMADA PARA OS LOGS
-                self._menu_logs()

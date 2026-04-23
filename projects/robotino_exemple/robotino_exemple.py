@@ -9,11 +9,13 @@ class RobotinoSimu(BaseApp):
     """
     def __init__(self):
         """ Inicialização da aplicação"""
-        super().__init__(scene_file="robotino.ttt",sim_time=60)
+        super().__init__(scene_file="robotino.ttt",sim_name="robotino_exemple",sim_time=60)
 
     def setup(self):
         """Configura os recurso da simulação"""
         self.logger.info("Configurando o robô e os sensores")
+
+        # Instancio o robô para abstrair comandos
         self.robot = Robotino(sim=self.sim, 
                             robot_name='robotino')
         

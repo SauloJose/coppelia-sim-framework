@@ -4,18 +4,22 @@ from brainbyte.robots.base.base_bot import BaseBot
 class PioneerBot(BaseBot):
     """Controle específico para robô diferencial Pioneer P3DX."""
 
-    def __init__(self, sim, robot_name='PioneerP3DX', left_motor='leftMotor', right_motor='rightMotor'):
+    def __init__(self, sim, 
+                 robot_name='PioneerP3DX', 
+                 left_motor='leftMotor', 
+                 right_motor='rightMotor'
+                 ):
         super().__init__(sim, robot_name)
 
-        # ==========================================
+        
         # ESTADOS INTERNOS
-        # ==========================================
+        
         self._robot_vel = np.zeros(2)     # [v, omega] (linear em X, angular em Z)
         self._wheel_vels = np.zeros(2)    # [wl, wr] em rad/s (roda esquerda, roda direita)
         
-        # ==========================================
+        
         # PARÂMETROS FÍSICOS
-        # ==========================================
+        
         self._R = 0.0975  # Raio da roda (m)
         self._L = 0.381   # Distância entre as rodas (Wheelbase) (m)
         
@@ -24,9 +28,9 @@ class PioneerBot(BaseBot):
         
         self._update_kinematic_matrices()
 
-        # ==========================================
+        
         # CONFIGURAÇÃO DE JUNTAS / HANDLES NO SIMULADOR
-        # ==========================================
+        
         # Lógica inteligente para o caminho:
         # Se começar com '/' ou './', o usuário passou o caminho exato. Usa direto.
         # Caso contrário, assume que é filho direto do robô e monta a string padrão.
@@ -43,30 +47,8 @@ class PioneerBot(BaseBot):
             if handle == -1:
                 raise ValueError(f"Junta '{name}' não encontrada no robô '{robot_name}'. Caminho buscado: {self.joints}")
             
-    # ==========================================
+    
     # PROPRIEDADES INTEGRADAS AO COPPELIASIM
-    # ==========================================
-    @property
-    def pose(self):
-        """Retorna a pose real do robô [x, y, theta] diretamente do simulador."""
-        pos, ori = self.get_pose() 
-        x, y = pos[0], pos[1]
-        theta = ori[2] # Rotação no eixo Z (gamma)
-        return np.array([x, y, theta])
-
-    @pose.setter
-    def pose(self, nova_pose):
-        """Teleporta o robô para uma nova pose [x, y, theta] no CoppeliaSim."""
-        if len(nova_pose) != 3:
-            raise ValueError("A pose deve conter 3 elementos: [x, y, theta].")
-        
-        x, y, theta = nova_pose
-        pos_atual, ori_atual = self.get_pose()
-        
-        # Mantém a altura (Z) e as rotações de inclinação (alpha, beta) intactas
-        self.sim.setObjectPosition(self.robot_handle, self.sim.handle_world, [x, y, pos_atual[2]])
-        self.sim.setObjectOrientation(self.robot_handle, self.sim.handle_world, [ori_atual[0], ori_atual[1], theta])
-
     @property
     def dimensions(self):
         """Retorna (Wheelbase, Raio da Roda)."""
@@ -88,9 +70,8 @@ class PioneerBot(BaseBot):
         """Retorna as velocidades locais do chassi [v, omega]."""
         return self._robot_vel
 
-    # ==========================================
+    
     # CÁLCULOS CINEMÁTICOS (MATRIZES)
-    # ==========================================
     def _update_kinematic_matrices(self):
         """
         Constrói as matrizes de cinemática baseadas na modelagem diferencial.
@@ -146,9 +127,9 @@ class PioneerBot(BaseBot):
         
         return self._robot_vel
 
-    # ==========================================
+    
     # CONTROLES GERAIS
-    # ==========================================
+    
     def stop(self):
         """Para as rodas."""
         self.set_wheel_velocity(0.0, 0.0)

@@ -14,7 +14,7 @@ import numpy as np
 
 
 class LocomocaoTeste(BaseApp):
-    """Teste de trajetória Lissajous com robô Pioneer P3DX.
+    """Teste de trajetória Lissajous com robô Pioneer P3DX com malha aberta
 
     Exemplo de um teste que herda `BaseApp`. Implementa:
     - `setup()`: captura de handles do robô
@@ -23,7 +23,9 @@ class LocomocaoTeste(BaseApp):
     """
 
     def __init__(self):
-        super().__init__(scene_file="locomocao.ttt", sim_time=60.0)
+        super().__init__(scene_file="locomocao.ttt",
+                         sim_name="malha_aberta_exemplo",
+                         sim_time=60.0)
 
     def setup(self):
         """Configura recursos necessários antes da simulação começar."""

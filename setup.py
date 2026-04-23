@@ -6,8 +6,8 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    name="coppelia-sim-framework",
-    version="1.1.0",
+    name="brainbyte",
+    version="1.1.12",
     author="Saulo José",
     author_email="saulo-jose12@hotmail.com",
     description="Professional Python framework for CoppeliaSim robot simulations",

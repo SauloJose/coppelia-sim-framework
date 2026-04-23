@@ -6,7 +6,7 @@ from .arms import *
 # Robôs móveis
 from .movel.pioneerBot import *
 from .movel.robotino import *
-from .movel.youBot import * 
+from .movel.Manta import * 
 
 # Drones 
 

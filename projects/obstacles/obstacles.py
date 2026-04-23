@@ -58,7 +58,9 @@ class ObstacleAvoidanceTester(BaseApp):
     """
 
     def __init__(self):
-        super().__init__(scene_file="house.ttt", sim_time=60.0)
+        super().__init__(scene_file="house.ttt", 
+                         sim_name="obstacles",
+                         sim_time=60.0)
         
         # Constantes da lógica de navegação
         self.DIST_SEGURA = 0.8              # Distância considerada segura (metros)

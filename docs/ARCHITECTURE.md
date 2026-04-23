@@ -25,11 +25,12 @@ coppelia_sim_framework/
 ├── robots/                  # Robot definitions (future)
 └── gui/                     # GUI components (future)
 
-examples/                     # Example applications
+projects/                     # Example applications
 ├── __init__.py
-├── locomocao_example.py     # Lissajous trajectory following
-└── obstacle_avoidance_example.py  # LIDAR-based obstacle avoidance
-
+├── exemple/
+│   ├── __init__.py
+│   ├── exemple.py            # Main aplication 
+│   └── scene.ttt             # scene of coppelia
 tests/                        # Unit and integration tests
 ├── __init__.py
 └── test_framework.py

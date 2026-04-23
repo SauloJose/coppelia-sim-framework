@@ -32,7 +32,12 @@ class BaseApp:
 
     Subclasses must override `setup()` and `loop(t)` to implement the test logic.
     """
-    def __init__(self, scene_file=None, sim_time=10.0, log_file =None):
+    def __init__(self, scene_file=None, 
+                 sim_name=None, 
+                 sim_time=10.0, 
+                 log_file =None):
+        
+        self.sim_name = sim_name
         self.scene_file = scene_file
         self.sim_time = sim_time
 
@@ -74,7 +79,16 @@ class BaseApp:
         try:
             # Carregar cena
             if self.scene_file:
-                scene_path = os.path.abspath(f"scenes/{self.scene_file}")
+                # Descobre o caminho absoluto do script que chamou o BaseApp (ex: seu_app.py)
+                try:
+                    child_module = sys.modules[self.__class__.__module__]
+                    base_dir = os.path.dirname(os.path.abspath(child_module.__file__))
+                except (KeyError, AttributeError):
+                    # Fallback de segurança
+                    base_dir = os.getcwd()
+
+                scene_path = os.path.join(base_dir, self.scene_file)
+
                 if not os.path.exists(scene_path):
                     raise FileNotFoundError(f"Scene not found: {scene_path}")
                 self.logger.info(f"Loading scene: {self.scene_file}...")
@@ -82,6 +96,7 @@ class BaseApp:
             
             self.client.setStepping(True)
             self.setup()
+
             self.logger.info("Starting simulation...")
             self.sim.startSimulation()
             self.post_start()
@@ -114,6 +129,20 @@ class BaseApp:
                     os.remove(self._temp_log_file)
                 except OSError:
                     pass
+    
+    # Puxar informações padrões 
+    def d_time(self):
+        """
+        retorna o intervalo de tempo da simulação
+        """
+        return self.sim.getSimulationTimeStep()
+    
+    def simu_time(self):
+        """
+        retorna o tempo atual da simulação
+        """
+        return self.sim.getSimulationTime()
+    
     # ==========================================
     # METHODS TO BE OVERRIDDEN IN CHILD CLASSES
     # ==========================================

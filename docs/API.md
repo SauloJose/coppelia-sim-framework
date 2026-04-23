@@ -303,7 +303,7 @@ except Exception as e:
 
 ## Version History
 
-**v1.1.0** (Current)
+**v1.1.2** (Current)
 - Added `post_start()` lifecycle method
 - Improved sensor data validation patterns
 - Enhanced documentation

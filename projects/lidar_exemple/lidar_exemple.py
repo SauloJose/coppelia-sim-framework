@@ -101,7 +101,9 @@ class LaserVisualizationExample(BaseApp):
         - Auto-diagnostic: Disabled by default (set True to run motor test)
         """
         self.auto_diagnostic = False
-        super().__init__(scene_file="labirinto.ttt", sim_time=60.0)
+        super().__init__(scene_file="labirinto.ttt", 
+                         sim_name="lidar_exemple",
+                         sim_time=60.0)
         self._first_exec = True  # Flag to draw laser plot on first loop
 
     def setup(self):

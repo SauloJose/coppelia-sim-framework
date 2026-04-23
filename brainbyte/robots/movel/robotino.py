@@ -4,18 +4,20 @@ from brainbyte.robots.base.base_bot import *
 class Robotino(BaseBot):
     """Controle específico para o robô "robotino" omnidirecional de 3 rodas."""
 
-    def __init__(self, sim, robot_name='robotino'):
+    def __init__(self, sim, 
+                 robot_name='robotino',
+                 w0_handle = 'wheel0_joint',
+                 w1_handle = 'wheel1_joint',
+                 w2_handle = 'wheel2_joint'):
         super().__init__(sim, robot_name)
         
-        # ==========================================
+
         # ESTADOS INTERNOS PROTEGIDOS (Usarão getters/setters)
-        # ==========================================
         self._robot_vel = np.zeros(3)     # [vx, vy, omega] local
         self._wheel_vels = np.zeros(3)    # [w0, w1, w2] rad/s das rodas
         
-        # ==========================================
+
         # PARÂMETROS FÍSICOS
-        # ==========================================
         self._L = 0.135   # Distância do centro do robô até a roda (m)
         self._R = 0.04    # Raio da roda (m)
         self.H = np.zeros((3, 3))      # Matriz de Cinemática Inversa
@@ -23,12 +25,11 @@ class Robotino(BaseBot):
         
         self._update_kinematic_matrices() # Monta as matrizes na inicialização
 
-        # ==========================================
+
         # CONFIGURAÇÃO DE JUNTAS / HANDLES NO SIMULADOR
-        # ==========================================
-        self.w0_handle = 'wheel0_joint'
-        self.w1_handle = 'wheel1_joint'
-        self.w2_handle = 'wheel2_joint' # Corrigido de 'wheel3_joint' para manter o padrão 0, 1, 2
+        self.w0_handle = w0_handle
+        self.w1_handle = w1_handle
+        self.w2_handle = w2_handle # Corrigido de 'wheel3_joint' para manter o padrão 0, 1, 2
 
         # Mapeando as juntas no simulador (CoppeliaSim/V-REP)
         self.joints = {
@@ -41,47 +42,6 @@ class Robotino(BaseBot):
         for name, handle in self.joints.items():
             if handle == -1:
                 raise ValueError(f"Junta '{name}' não encontrada no robô '{robot_name}'. Verifique a hierarquia no simulador.")
-
-    # ==========================================
-    # PROPRIEDADES
-    # ==========================================
-    @property
-    def pose(self):
-        """
-        Retorna a pose real do robô [x, y, theta] diretamente do simulador.
-        Utiliza o método get_pose() herdado da classe BaseBot.
-        """
-        # pos = [x, y, z] e ori = [alpha, beta, gamma]
-        pos, ori = self.get_pose() 
-        
-        # Para um robô planar, queremos X, Y e a rotação no eixo Z (gamma)
-        x, y = pos[0], pos[1]
-        theta = ori[2] 
-        
-        return np.array([x, y, theta])
-
-    @pose.setter
-    def pose(self, nova_pose):
-        """
-        Teleporta o robô para uma nova pose [x, y, theta] no CoppeliaSim.
-        """
-        if len(nova_pose) != 3:
-            raise ValueError("A pose deve conter 3 elementos: [x, y, theta].")
-        
-        x, y, theta = nova_pose
-        
-        # Pegamos a pose atual para não alterar a altura (Z) 
-        # e as rotações de inclinação (alpha, beta) acidentalmente.
-        pos_atual, ori_atual = self.get_pose()
-        
-        z = pos_atual[2]
-        alpha = ori_atual[0]
-        beta = ori_atual[1]
-        
-        # Envia os comandos diretamente para a API do CoppeliaSim
-        # (Assumindo a sintaxe padrão da API ZeroMQ/B0 do CoppeliaSim)
-        self.sim.setObjectPosition(self.robot_handle, self.sim.handle_world, [x, y, z])
-        self.sim.setObjectOrientation(self.robot_handle, self.sim.handle_world, [alpha, beta, theta])
 
     @property
     def wheel_velocities(self):
@@ -109,9 +69,8 @@ class Robotino(BaseBot):
         self._R = R
         self._update_kinematic_matrices()
 
-    # ==========================================
+    
     # CÁLCULOS CINEMÁTICOS
-    # ==========================================
     def _update_kinematic_matrices(self):
         """
         Atualiza as matrizes de cinemática baseando-se nos ângulos específicos do Robotino.
@@ -175,9 +134,8 @@ class Robotino(BaseBot):
         
         return self._robot_vel
     
-    # ==========================================
+    
     # CONTROLES GERAIS
-    # ==========================================
     def set_wheels_handles(self, w0='wheel0_joint', w1='wheel1_joint', w2='wheel2_joint'):
         """Atualiza o nome dos handles e remapeia as juntas."""
         self.w0_handle = w0
