@@ -1,5 +1,5 @@
 from brainbyte import BaseApp
-from brainbyte.robots.movel.robotino import *
+from brainbyte.robots.movel.Robotino import *
 
 
 

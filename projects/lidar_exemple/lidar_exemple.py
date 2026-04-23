@@ -16,7 +16,7 @@ import logging
 
 from brainbyte import BaseApp
 from brainbyte.sensors import HokuyoSensorSim
-from brainbyte.robots.movel.pioneerBot import PioneerBot
+from brainbyte.robots.movel.PioneerBot import PioneerBot
 
 def draw_laser_data(laser_data, max_sensor_range=5, show=False, save_path=None):
     """Plots laser scan data in polar coordinates.
@@ -206,7 +206,7 @@ class LaserVisualizationExample(BaseApp):
         dist_dir = laser_data[lado_direito, 1]
 
         # Log sensor readings (DEBUG level to avoid console spam in production)
-        self.logger.debug(f"[{t:.2f}s] Sensor -> Left: {dist_esq:.2f}m | Front: {dist_frente:.2f}m | Right: {dist_dir:.2f}m")
+        #self.logger.debug(f"[{t:.2f}s] Sensor -> Left: {dist_esq:.2f}m | Front: {dist_frente:.2f}m | Right: {dist_dir:.2f}m")
 
         # === OBSTACLE AVOIDANCE LOGIC ===
         v = 0.0
@@ -231,7 +231,7 @@ class LaserVisualizationExample(BaseApp):
         try:
             self.robot.set_wheel_velocity(v, w)
             wl, wr = self.robot.wheel_velocities
-            self.logger.debug(f"Velocity command: wl={wl:.3f}, wr={wr:.3f}")
+            #self.logger.debug(f"Velocity command: wl={wl:.3f}, wr={wr:.3f}")
         except Exception:
             self.logger.exception("Failed to apply velocities to motors.")
 

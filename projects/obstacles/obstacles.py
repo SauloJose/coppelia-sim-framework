@@ -9,7 +9,7 @@ Exemplo de uso do framework CoppeliaSim que demonstra:
 
 from brainbyte import BaseApp
 from brainbyte.sensors import HokuyoSensorSim
-from brainbyte.robots.movel.pioneerBot import *
+from brainbyte.robots.movel.PioneerBot import *
 import matplotlib.pyplot as plt
 import numpy as np
 import time

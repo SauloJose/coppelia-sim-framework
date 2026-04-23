@@ -8,7 +8,7 @@ Exemplo de uso do framework CoppeliaSim que demonstra:
 """
 
 from brainbyte import BaseApp, Plot2D
-from brainbyte.robots.movel.pioneerBot import PioneerBot 
+from brainbyte.robots.movel.PioneerBot import PioneerBot 
 from brainbyte.control.control import PID_Controller
 import numpy as np
 
