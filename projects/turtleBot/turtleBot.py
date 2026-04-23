@@ -110,10 +110,10 @@ class turtleBot(BaseApp):
             #Controlador manual
             v_target,w_target = self.control.get_command()
             
-            #Filtro passa baixa para o comando (tau.dv/dt + v = v_desjado) 
+            ### Filtro passa baixa para o comando (tau.dv/dt + v = v_desjado) 
             alpha = self.dt / self.tau   # fator de mistura
 
-            # Aproximação de euler: 
+            # Aproximação de euler (v[k+1] = v[k] + alpha * (v_max - v[comando])): 
             self.v_cmd += alpha * (v_target - self.v_cmd)
             self.w_cmd += alpha * (w_target - self.w_cmd)
 
