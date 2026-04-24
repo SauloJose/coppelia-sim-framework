@@ -11,6 +11,11 @@ from brainbyte.core.paths import *
 import traceback
 import msvcrt
 
+import platform
+import subprocess
+from pathlib import Path # Garantindo que Path esteja disponível, caso não esteja no topo do arquivo
+from coppeliasim_zmqremoteapi_client import RemoteAPIClient
+
 class brainGUI:
     def __init__(self):
         self.logger = setup_logger(__name__, '[BRAINBYTE]',log_file=LOG_BRAIN_FILE)
@@ -284,10 +289,26 @@ class brainGUI:
         get_key()  # aguarda
 
     # ---------- Funcionalidades originais ----------
-    def _list_projects(self):
+    def _list_topics(self):
+        """Lista as subpastas em 'projects/' que servem como categorias/tópicos."""
+        target_dir = Path.cwd() / "projects"
+        
+        if not target_dir.exists() or not target_dir.is_dir():
+            self.logger.warning("A pasta 'projects' não foi encontrada.")
+            return []
+            
+        topics = []
+        for item in target_dir.iterdir():
+            # Critérios: É uma pasta e não é oculta
+            if item.is_dir() and not item.name.startswith((".", "__")):
+                topics.append(item.name)
+                
+        return sorted(topics)
+    
+    def _list_projects_in_topic(self,topic_name):
         """Lista as subpastas em 'projects/' que contêm um script .py correspondente"""
         # Certifique-se que self.projects_folder aponta para a pasta 'projects'
-        target_dir = Path.cwd() / "projects"
+        target_dir = Path.cwd() / "projects" / topic_name
         
         if not target_dir.exists() or not target_dir.is_dir():
             self.logger.warning("A pasta 'projects' não foi encontrada.")
@@ -307,32 +328,54 @@ class brainGUI:
 
     def _choose_project(self):
         """Menu de seleção de projetos dentro da pasta 'projects/'"""
-        # Agora chamamos o método atualizado que lista pastas
-        self.projects_list = self._list_projects() 
+        #Escolher o tópico
+        topics_list = self._list_topics()
+
+        if not topics_list:
+            fox_print("Nenhum tópico encontrado na pasta 'projects/'.", width=40)
+            get_key()
+            return
         
-        if not self.projects_list:
+        opcoes_topicos = topics_list + ["Voltar"]
+        idx_topico = self._menu_navegavel(
+            "ESCOLHER TÓPICO",
+            opcoes_topicos,
+            msg_raposa="Escolha a categoria do projeto.",
+            subtitulo=f"{len(topics_list)} tópicos disponíveis"
+        )
+
+        if idx_topico is None or idx_topico == -1 or idx_topico == len(topics_list):
+            return
+            
+        selected_topic = topics_list[idx_topico]
+
+
+        # Agora chamamos o método atualizado que lista pastas
+        projects_list = self._list_projects_in_topic(selected_topic) 
+        
+        if not projects_list:
             fox_print("Nenhum projeto encontrado na pasta 'projects/'.", width=40)
             get_key()
             return
         
-        opcoes = self.projects_list + ["Voltar"]
-        idx = self._menu_navegavel(
-            "INICIAR SIMULAÇÃO",
-            opcoes,
-            msg_raposa="Escolha um projeto para executar.",
-            subtitulo=f"{len(self.projects_list)} projetos disponíveis"
+        opcoes_projetos = projects_list + ["Voltar"]
+        idx_proj = self._menu_navegavel(
+            f"TÓPICO: {selected_topic.upper()}",
+            opcoes_projetos,
+            msg_raposa="Agora, escolha o projeto para executar.",
+            subtitulo=f"{len(projects_list)} projetos disponíveis"
         )
-        
-        if idx is None or idx == -1 or idx == len(self.projects_list):
+
+        if idx_proj is None or idx_proj == -1 or idx_proj == len(projects_list):
             return
-            
-        selected = self.projects_list[idx]
-        self.logger.info(f"Iniciando projeto: {selected}")
+
+        selected_project = projects_list[idx_proj]
+        self.logger.info(f"Iniciando projeto: {selected_topic}/{selected_project}")
         
         try:
             # LÓGICA DE IMPORTAÇÃO: projects.NomeDaPasta.NomeDoArquivo
             # Ex: projects.MeuRobo.MeuRobo
-            module_path = f"projects.{selected}.{selected}"
+            module_path = f"projects.{selected_topic}.{selected_project}.{selected_project}"
             module = importlib.import_module(module_path)
 
             importlib.reload(module) 
@@ -341,7 +384,7 @@ class brainGUI:
             self.banner()
 
             if hasattr(module, 'app'):
-                fox_print(f"O projeto '{selected}' foi iniciado. Para pausar ou cancelar clique em 'ctrl+c' ou 'x'.", width=45)
+                fox_print(f"O projeto '{selected_project}' ({selected_topic}) foi iniciado. Para pausar ou cancelar clique em 'ctrl+c' ou 'x'.", width=45)
                 try:
                     module.app()
                 except Exception as e:
@@ -351,7 +394,7 @@ class brainGUI:
                     print("="*50 + "\n")
                     input("Pressione ENTER para voltar ao menu...")
             else:
-                fox_print(f"Erro: O arquivo '{selected}.py' não contém a função 'app()'.", width=45)
+                fox_print(f"Erro: O arquivo '{selected_project}.py' não contém a função 'app()'.", width=45)
                 get_key()
 
             msvcrt.getch()
@@ -363,10 +406,7 @@ class brainGUI:
             
     def _create_new_simulation(self):
         """Coleta dados do usuário e gera a pasta do projeto com os scripts e cena."""
-        import platform
-        import subprocess
-        from coppeliasim_zmqremoteapi_client import RemoteAPIClient
-        
+
         os.system('cls' if os.name == 'nt' else 'clear')
         self.banner()
         print(fox_say("Vamos criar uma nova simulação! Preencha os dados abaixo.", width=65))
@@ -377,7 +417,31 @@ class brainGUI:
         sys.stdout.flush()
 
         try:
-            # 1. Coleta os inputs
+            base_dir = Path.cwd()
+            projects_dir = base_dir / "projects"
+            
+            # Garante que a pasta projects exista para podermos listar
+            projects_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Verifica e exibe os tópicos existentes
+            topicos_existentes = [d.name for d in projects_dir.iterdir() if d.is_dir() and not d.name.startswith('__')]
+            
+            if topicos_existentes:
+                print("\n\033[96mTópicos já existentes:\033[0m")
+                for t in sorted(topicos_existentes):
+                    print(f"  \033[90m-\033[0m {t}")
+                print("\033[90m(Digite um nome acima para salvar nele, ou um novo para criar outra pasta. \n OBS: Evite acentuação e espaços!)\033[0m\n")
+            else:
+                print("\n\033[90mNenhum tópico criado ainda. O que você digitar será o primeiro!\033[0m\n")
+
+            ## Coleta os inputs
+            # Coleto o tópico
+            nome_topico = input("\033[92m> \033[0mNome do tópico (ex: locomocao): ").strip()
+            if not nome_topico:
+                self._exibir_texto_com_raposa("Aviso", "A criação foi cancelada (tópico vazio).")
+                return
+
+            # Coleto a aplicação
             nome_aplicacao = input("\033[92m> \033[0mNome da aplicação (ex: MeuRobo): ").strip()
             if not nome_aplicacao:
                 self._exibir_texto_com_raposa("Aviso", "A criação foi cancelada (nome vazio).")
@@ -387,6 +451,7 @@ class brainGUI:
             nome_cena = input("\033[92m> \033[0mNome da cena (ex: cena_basica): ").strip()
 
             # 2. Prepara os caminhos e remove espaços/extensões
+            nome_topico_limpo = nome_topico.replace(' ', '_').lower()
             nome_aplicacao_limpo = nome_aplicacao.replace('.py', '').replace(' ', '')
             nome_cena_limpo = nome_cena.replace('.ttt', '').replace(' ', '_')
 
@@ -398,7 +463,7 @@ class brainGUI:
             
             # Caminhos de destino
             projects_dir = base_dir / "projects"
-            sim_folder = projects_dir / nome_aplicacao_limpo
+            sim_folder = projects_dir / nome_topico_limpo / nome_aplicacao_limpo
             
             # Garante que as pastas existam
             sim_folder.mkdir(parents=True, exist_ok=True)
@@ -434,10 +499,10 @@ class brainGUI:
             # 5. Feedback de sucesso e fala da raposa
             mensagem_sucesso = (
                 f"Simulação criada com sucesso!\n\n"
-                f"📁 Projeto salvo em: projects/{nome_aplicacao_limpo}/\n"
+                f"📁 Projeto salvo em: projects/{nome_topico_limpo}/{nome_aplicacao_limpo}/\n"
                 f"📄 Script principal: {arquivo_py}\n"
                 f"📄 Cena do Coppelia: {arquivo_ttt}\n\n"
-                f"O arquivo criado irá abrir para edições!" # <--- A raposa fala aqui
+                f"O arquivo criado irá abrir para edições!"
             )
             self._exibir_texto_com_raposa("Sucesso!", mensagem_sucesso)
 

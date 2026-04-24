@@ -1,19 +1,37 @@
-from brainbyte import BaseApp
-from brainbyte.robots.movel import *
-from brainbyte.control.control import * # Classe principal    
+from brainbyte import BaseApp             # A aplicação básica está aqui
+from brainbyte.robots import *            # Os robôs configurados estão nessa Pasta 
+from brainbyte.control.automatic import * # Controle automático    
+from brainbyte.control.manual import *    # Controle Manual  
 
 
-# Aqui está a definição da classe que representa a simulação
+"""
+@GN0MIO: Este template serve como ponto de partida para a estruturação e desenvolvimento da sua simulação.
+
+- setup(): Configuração inicial do cenário. Utilize este método para instanciar robôs, adicionar sensores e preparar o ambiente. Consulte a documentação oficial para mais detalhes.
+
+- post_start(): Método de transição executado imediatamente após o setup() e antes do ciclo contínuo. Ideal para rotinas de calibração ou ações únicas de inicialização que não devem entrar no loop().
+
+- loop(): Núcleo de execução contínua onde a lógica principal é implementada. Atenção: O tempo de execução deste ciclo é crítico. Para cálculos pesados ou aplicações complexas, implemente soluções multi-thread para evitar travamentos (crashes) no CoppeliaSim.
+
+- stop(): Rotina de encerramento. Chamado ao finalizar a simulação, é o local correto para salvar resultados, exportar dados, gerar gráficos e limpar processos da memória.
+
+Logs e Depuração:
+Para registrar eventos na simulação, utilize a instância self.logger acompanhada do nível de severidade adequado: .info(), .debug(), .warning() ou .error().
+
+OBS: A simulação só é executada se o CoppeliaSim estiver aberto!
+"""
+
 class {name_app}(BaseApp):
     """
-        Teste de locomoção de obstáculos do robotino
+    Classe principal da simulação {name_app}.
+    Gerencia o ciclo de vida da aplicação, integrando a lógica de controle com a cena do CoppeliaSim.
     """
     def __init__(self):
-        """ Inicialização da aplicação"""
+        """Inicializa os parâmetros base da aplicação, definindo a cena e o tempo total de simulação."""
         super().__init__(scene_file="{name_scene}.ttt", sim_name="{name_app}", sim_time={simulation_time})
 
     def setup(self):
-        """Configura os recurso da simulação"""
+        """Configura os recursos iniciais da simulação (instanciação de robôs, sensores e controladores)."""
         try:
             self.logger.info("Configuring Robot, Sensor and Controllers...")
 
@@ -27,40 +45,45 @@ class {name_app}(BaseApp):
             
             self.dt = self.d_time()
             #pos = self.robot.pose
-            # CHAVES DUPLAS AQUI:
-            #self.logger.info(f'Initial robot position: x={{pos[0]:.2f}}, y={{pos[1]:.2f}}')
+
             
+            # self.logger.info(f'Initial robot position: x={{pos[0]:.2f}}, y={{pos[1]:.2f}}')
             
-            # Defina um controlador para adicionar aqui
-            #self.robot.add_control(control_name="PID",
-                                #control_instance=self.PID) 
+            # Exemplo de vinculação de um controlador ao robô
+            # self.robot.add_control(control_name="PID",
+            #                        control_instance=self.PID)
+
         except Exception as e:
             self.logger.error(f"Error detected in setup(): {{e}}")
             
     def post_start(self):
-        """ É executado logo quando inicia a simulação"""
+        """Executado uma única vez imediatamente após a inicialização da simulação, antes do loop principal."""
         return super().post_start()
     
     def loop(self, t):
-        """ Etapas do loop"""
+        """
+        Núcleo de execução contínua. 
+        Implemente aqui a lógica de controle principal, leitura de sensores e atualização de atuadores.
+        """
         try:
             # Adicione a lógica do loop aqui
             pass 
         except Exception as e:
-            # CHAVES DUPLAS AQUI:
             self.logger.error(f"Error detected in loop(): {{e}}")
 
     def stop(self):
-        """ Executado após a simulação terminar - parada segura"""
+        """Rotina de encerramento para garantir a parada segura dos componentes e exportação de resultados."""
         try:
-            self.robot.stop()
+            # Descomente a linha abaixo quando tiver instanciado self.robot no setup()
+            # self.robot.stop()
+            pass
         except Exception as e:
-            # CHAVES DUPLAS AQUI:
             self.logger.error(f"Error detected in stop(): {{e}}")
 
 def app():
     """
-        Ponto de entrada para a simulação em main.py
+    Ponto de entrada principal da simulação. 
+    Instancia a classe e inicia o ciclo de vida (run) para integração com o gerenciador BRAINBYTE.
     """
     aplicacao = {name_app}()
     aplicacao.run()
