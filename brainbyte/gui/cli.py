@@ -15,6 +15,7 @@ import platform
 import subprocess
 from pathlib import Path # Garantindo que Path esteja disponível, caso não esteja no topo do arquivo
 from coppeliasim_zmqremoteapi_client import RemoteAPIClient
+from textwrap import dedent
 
 class brainGUI:
     def __init__(self):
@@ -61,13 +62,13 @@ class brainGUI:
         print("\033[90m" + " " * left_margin + line_char * decor_len + "\033[0m")
 
     # ---------- Menus navegáveis ----------
-    def _menu_navegavel(self, titulo, opcoes, msg_raposa=None, subtitulo=None):
+    def _menu_navegavel(self, titulo, opcoes, msg_bot=None, subtitulo=None):
         """Exibe um menu navegável fluido, atualizando apenas as linhas necessárias."""
         # Limpa a tela e imprime o cabeçalho APENAS na primeira vez
         os.system('cls' if os.name == 'nt' else 'clear')
         self.banner()
-        if msg_raposa:
-            print(fox_say(msg_raposa))
+        if msg_bot:
+            print(BOT_say(msg_bot))
         
         term_width = shutil.get_terminal_size().columns
         menu_width = min(70, term_width - 4)
@@ -160,7 +161,7 @@ class brainGUI:
             escolha = self._menu_navegavel(
                 "VISUALIZADOR DE LOGS",
                 opcoes_logs,
-                msg_raposa="Qual arquivo de log você deseja analisar?",
+                msg_bot="Qual arquivo de log você deseja analisar?",
                 subtitulo="Selecione a origem dos logs"
             )
             
@@ -169,18 +170,18 @@ class brainGUI:
             elif escolha == 0:
                 # Log principal do sistema
                 conteudo = self._ler_arquivo_log(LOG_BRAIN_FILE)
-                self._exibir_texto_com_raposa("Log do Sistema (main.log)", conteudo)
+                self._exibir_texto_com_bot("Log do Sistema (main.log)", conteudo)
             elif escolha == 1:
                 # Log da simulação
                 conteudo = self._ler_arquivo_log(LOG_APP_FILE)
-                self._exibir_texto_com_raposa("Log da Simulação", conteudo)
+                self._exibir_texto_com_bot("Log da Simulação", conteudo)
             elif escolha == 2:
                 # Menu de confirmação (Y/N) usando a própria interface do sistema
                 opcoes_confirmacao = ["Sim (Y) - Apagar tudo", "Não (N) - Cancelar"]
                 confirmacao = self._menu_navegavel(
                     "CONFIRMAÇÃO",
                     opcoes_confirmacao,
-                    msg_raposa="Deseja mesmo apagar todos os logs?\nEsta ação não poderá ser desfeita.",
+                    msg_bot="Deseja mesmo apagar todos os logs?\nEsta ação não poderá ser desfeita.",
                     subtitulo="Atenção!"
                 )
                 
@@ -192,12 +193,12 @@ class brainGUI:
                                 # Abrir em modo 'w' apaga o conteúdo do arquivo
                                 with open(log_path, 'w', encoding='utf-8') as f:
                                     pass 
-                        self._exibir_texto_com_raposa(
+                        self._exibir_texto_com_bot(
                             "Logs Limpos", 
                             "Todos os registros de log foram apagados com sucesso!"
                         )
                     except Exception as e:
-                        self._exibir_texto_com_raposa(
+                        self._exibir_texto_com_bot(
                             "Erro ao Limpar Logs", 
                             f"Não foi possível limpar os arquivos:\n{e}"
                         )
@@ -214,7 +215,7 @@ class brainGUI:
         
         os.system('cls' if os.name == 'nt' else 'clear')
         self.banner()
-        print(fox_say("Configurações do sistema. Use ESPAÇO para alternar checkboxes.", width=60))
+        print(BOT_say("Configurações do sistema. Use ESPAÇO para alternar checkboxes.", width=60))
         
         term_width = shutil.get_terminal_size().columns
         menu_width = min(70, term_width - 4)
@@ -277,11 +278,11 @@ class brainGUI:
             sys.stdout.write('\033[?25h')
             sys.stdout.flush()
 
-    def _exibir_texto_com_raposa(self, titulo, conteudo):
-        """Exibe uma tela informativa com a raposa e aguarda tecla."""
+    def _exibir_texto_com_bot(self, titulo, conteudo):
+        """Exibe uma tela informativa com a bot e aguarda tecla."""
         os.system('cls' if os.name == 'nt' else 'clear')
         self.banner()
-        print(fox_say(titulo))
+        print(BOT_say(titulo))
         print("\n" + "\033[90m" + "─" * 70 + "\033[0m")
         print(conteudo)
         print("\n" + "\033[90m" + "─" * 70 + "\033[0m")
@@ -332,7 +333,7 @@ class brainGUI:
         topics_list = self._list_topics()
 
         if not topics_list:
-            fox_print("Nenhum tópico encontrado na pasta 'projects/'.", width=40)
+            BOT_print("Nenhum tópico encontrado na pasta 'projects/'.", width=40)
             get_key()
             return
         
@@ -340,7 +341,7 @@ class brainGUI:
         idx_topico = self._menu_navegavel(
             "ESCOLHER TÓPICO",
             opcoes_topicos,
-            msg_raposa="Escolha a categoria do projeto.",
+            msg_bot="Escolha a categoria do projeto.",
             subtitulo=f"{len(topics_list)} tópicos disponíveis"
         )
 
@@ -354,7 +355,7 @@ class brainGUI:
         projects_list = self._list_projects_in_topic(selected_topic) 
         
         if not projects_list:
-            fox_print("Nenhum projeto encontrado na pasta 'projects/'.", width=40)
+            BOT_print("Nenhum projeto encontrado na pasta 'projects/'.", width=40)
             get_key()
             return
         
@@ -362,7 +363,7 @@ class brainGUI:
         idx_proj = self._menu_navegavel(
             f"TÓPICO: {selected_topic.upper()}",
             opcoes_projetos,
-            msg_raposa="Agora, escolha o projeto para executar.",
+            msg_bot="Agora, escolha o projeto para executar.",
             subtitulo=f"{len(projects_list)} projetos disponíveis"
         )
 
@@ -384,7 +385,7 @@ class brainGUI:
             self.banner()
 
             if hasattr(module, 'app'):
-                fox_print(f"O projeto '{selected_project}' ({selected_topic}) foi iniciado. Para pausar ou cancelar clique em 'ctrl+c' ou 'x'.", width=45)
+                BOT_print(f"O projeto '{selected_project}' ({selected_topic}) foi iniciado. Para pausar ou cancelar clique em 'ctrl+c' ou 'x'.", width=45)
                 try:
                     module.app()
                 except Exception as e:
@@ -394,13 +395,13 @@ class brainGUI:
                     print("="*50 + "\n")
                     input("Pressione ENTER para voltar ao menu...")
             else:
-                fox_print(f"Erro: O arquivo '{selected_project}.py' não contém a função 'app()'.", width=45)
+                BOT_print(f"Erro: O arquivo '{selected_project}.py' não contém a função 'app()'.", width=45)
                 get_key()
 
             msvcrt.getch()
                 
         except Exception as e:
-            fox_print(f"Erro ao carregar módulo: {type(e).__name__}: {e}", width=50)
+            BOT_print(f"Erro ao carregar módulo: {type(e).__name__}: {e}", width=50)
             get_key()
 
             
@@ -409,7 +410,7 @@ class brainGUI:
 
         os.system('cls' if os.name == 'nt' else 'clear')
         self.banner()
-        print(fox_say("Vamos criar uma nova simulação! Preencha os dados abaixo.", width=65))
+        print(BOT_say("Vamos criar uma nova simulação! Preencha os dados abaixo.", width=65))
         print("\n" + "\033[90m" + "─" * 70 + "\033[0m")
         
         # Ocultar o cursor no menu navegável é ótimo, mas aqui precisamos dele para o usuário digitar!
@@ -438,13 +439,13 @@ class brainGUI:
             # Coleto o tópico
             nome_topico = input("\033[92m> \033[0mNome do tópico (ex: locomocao): ").strip()
             if not nome_topico:
-                self._exibir_texto_com_raposa("Aviso", "A criação foi cancelada (tópico vazio).")
+                self._exibir_texto_com_bot("Aviso", "A criação foi cancelada (tópico vazio).")
                 return
 
             # Coleto a aplicação
             nome_aplicacao = input("\033[92m> \033[0mNome da aplicação (ex: MeuRobo): ").strip()
             if not nome_aplicacao:
-                self._exibir_texto_com_raposa("Aviso", "A criação foi cancelada (nome vazio).")
+                self._exibir_texto_com_bot("Aviso", "A criação foi cancelada (nome vazio).")
                 return
 
             tempo_simulacao = input("\033[92m> \033[0mTempo de simulação (em segundos): ").strip()
@@ -496,7 +497,7 @@ class brainGUI:
                 
             shutil.copy2(template_scene, caminho_nova_cena)
 
-            # 5. Feedback de sucesso e fala da raposa
+            # 5. Feedback de sucesso e fala da bot
             mensagem_sucesso = (
                 f"Simulação criada com sucesso!\n\n"
                 f"📁 Projeto salvo em: projects/{nome_topico_limpo}/{nome_aplicacao_limpo}/\n"
@@ -504,7 +505,7 @@ class brainGUI:
                 f"📄 Cena do Coppelia: {arquivo_ttt}\n\n"
                 f"O arquivo criado irá abrir para edições!"
             )
-            self._exibir_texto_com_raposa("Sucesso!", mensagem_sucesso)
+            self._exibir_texto_com_bot("Sucesso!", mensagem_sucesso)
 
             # 6. Abre o arquivo .py no editor padrão do sistema
             path_py_str = str(caminho_novo_app.resolve())
@@ -532,7 +533,7 @@ class brainGUI:
 
         except Exception as e:
             self.logger.error(f"Erro ao criar simulação: {e}")
-            self._exibir_texto_com_raposa(
+            self._exibir_texto_com_bot(
                 "Erro Crítico", 
                 f"Não foi possível criar a simulação:\n{e}"
             )
@@ -552,7 +553,7 @@ class brainGUI:
 
         os.system('cls' if os.name == 'nt' else 'clear')
         self.banner()
-        print(fox_say("Navegador de projeto. Digite 'help' para ver comandos."))
+        print(BOT_say("Navegador de projeto. Digite 'help' para ver comandos."))
 
         # Loop principal do navegador
         while True:
@@ -587,25 +588,28 @@ class brainGUI:
             elif command == "del":
                 self._nav_del_file(arg)
             else:
-                print(fox_say(f"Comando desconhecido: '{command}'. Digite 'help'.", width=50))
+                print(BOT_say(f"Comando desconhecido: '{command}'. Digite 'help'.", width=50))
             
             # Limpa a tela para próxima iteração (opcional, para manter a navegação limpa)
             # Se quiser manter histórico, remova os clears abaixo.
             os.system('cls' if os.name == 'nt' else 'clear')
             self.banner()
-            print(fox_say("Navegador de projeto. Digite 'help' para ver comandos."))
+            print(BOT_say("Navegador de projeto. Digite 'help' para ver comandos."))
 
     def _show_nav_help(self):
-        help_text = """
-        Comandos disponíveis:
-        \ncd <pasta>     - Entra na pasta especificada 
-        \nopen <arquivo> - Abre o arquivo no editor padrão do sistema
-        \nls / tree      - Reexibe a estrutura da pasta atual
-        \nhelp           - Mostra esta ajuda
-        \nexit / q       - Sai do navegador e volta ao menu principal
-        \ndel            - deleta uma arquivo
-        """
-        print(fox_say(help_text, width=60))
+        # O dedent remove os espaços à esquerda gerados pela indentação do código
+        help_text = dedent("""\
+            Comandos disponíveis:
+
+            cd <pasta>     - Entra na pasta especificada
+            open <arquivo> - Abre o arquivo no editor padrão
+            ls / tree      - Reexibe a estrutura da pasta atual
+            help           - Mostra esta ajuda
+            exit / q       - Sai do navegador e volta ao menu
+            del            - Deleta um arquivo
+        """).strip() # .strip() remove a quebra de linha extra do começo/fim
+
+        print(BOT_say(help_text, width=60))
         input("\nPressione ENTER para continuar...")
     
     def _nav_change_directory(self, arg):
@@ -744,7 +748,7 @@ class brainGUI:
     def run(self):
         """Método principal: exibe menu principal e despacha ações."""
         intro_text = (
-            "Bem-vindo ao BRAINBYTE! Eu sou a raposa guia. "
+            "Bem-vindo ao BRAINBYTE! Eu sou o Blue, seu agente guia. "
             "Aqui você gerencia infraestrutura de robótica, organiza scripts e integra LLMs. "
             "Use as setas para navegar e Enter para selecionar."
         )
@@ -766,7 +770,7 @@ class brainGUI:
             escolha = self._menu_navegavel(
                 "MENU PRINCIPAL",
                 opcoes_principal,
-                msg_raposa=intro_text,
+                msg_bot=intro_text,
                 subtitulo=None
             )
             
@@ -774,12 +778,12 @@ class brainGUI:
                 # Limpa a tela para a despedida ficar limpa
                 os.system('cls' if os.name == 'nt' else 'clear')
                 self.banner()
-                print(fox_say("Até logo! Foi bom ajudar você.", width=40))
+                print(BOT_say("Até logo! Foi bom ajudar você.", width=40))
                 break
             elif escolha == 0: # Inicia simulação
                 self._choose_project()
             elif escolha == 1: # Criar nova simulação (Em desenvolvimento)
-                '''self._exibir_texto_com_raposa(
+                '''self._exibir_texto_com_bot(
                     "Criar Nova Simulação",
                     "Módulo em desenvolvimento...\n"
                     "Em breve você poderá projetar novas simulações a partir daqui!"
@@ -788,7 +792,7 @@ class brainGUI:
             elif escolha == 2: # Navegar pelo projeto
                 self._navegate_project()
             elif escolha == 3: # Comandos
-                self._exibir_texto_com_raposa(
+                self._exibir_texto_com_bot(
                     "Comandos Disponíveis",
                     "COMANDOS (a implementar):\n"
                     "  > run <script>  - executa um script\n"
@@ -800,7 +804,7 @@ class brainGUI:
             elif escolha == 5: # Configurações
                 self._menu_configuracoes()
             elif escolha == 6: # Ajuda
-                self._exibir_texto_com_raposa(
+                self._exibir_texto_com_bot(
                     "Ajuda",
                     "Aqui você encontra ajuda sobre as funcionalidades.\n"
                     "- Iniciar simulação: execute exemplos pré-programados.\n"
@@ -811,12 +815,12 @@ class brainGUI:
                     "- Ver Logs: exibe os últimos registros de execução."
                 )
             elif escolha == 7: # Sobre o projeto
-                self._exibir_texto_com_raposa(
+                self._exibir_texto_com_bot(
                     "Sobre o BRAINBYTE",
                     "BRAINBYTE - Gerenciador de Infraestrutura de Robótica\n\n"
                     "Funcionalidades:\n"
                     "• Organização de scripts de simulação\n"
-                    "• Interface CLI amigável com mascote raposa\n"
+                    "• Interface CLI amigável com mascote bot\n"
                     "• Configurações flexíveis (CLI/ROS)\n"
                     "• Estrutura modular pronta para expansão"
                 )
