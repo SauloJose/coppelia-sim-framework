@@ -4,16 +4,16 @@ from brainbyte.robots.base.base_bot import BaseBot
 class TurtleBot(BaseBot):
     """Controle específico para robô diferencial Turtle Bot."""
 
-    def __init__(self, sim, 
+    def __init__(self, bridge, 
                  robot_name = 'Turtlebot3', 
                  left_motor = 'left_Motor', 
                  right_motor= 'right_Motor',
                  base_link  = 'base_link'
                  ):
-        super().__init__(sim, robot_name)
+        super().__init__(bridge, robot_name)
         
         #New handle 
-        self.robot_handle = self.sim.getObject(f'/{robot_name}/{base_link}')
+        self.robot_path = f'/{robot_name}/{base_link}'
     
         # ESTADOS INTERNO
         self._robot_vel = np.zeros(2)     # [v, omega] (linear em X, angular em Z)
@@ -33,28 +33,18 @@ class TurtleBot(BaseBot):
         # Matrizes de cinemática
         self.H = np.zeros((2, 2))      # Matriz de Cinemática Inversa
         self.H_inv = np.zeros((2, 2))  # Matriz de Cinemática Direta
-        
         self._update_kinematic_matrices()
 
         
         # CONFIGURAÇÃO DE JUNTAS / HANDLES NO SIMULADOR
-        
-        # Lógica inteligente para o caminho:
-        # Se começar com '/' ou './', o usuário passou o caminho exato. Usa direto.
-        # Caso contrário, assume que é filho direto do robô e monta a string padrão.
-        path_left = left_motor if left_motor.startswith(('/', '.')) else f'/{robot_name}/{left_motor}'
-        path_right = right_motor if right_motor.startswith(('/', '.')) else f'/{robot_name}/{right_motor}'
+        self.path_left = left_motor if left_motor.startswith(('/', '.')) else f'/{robot_name}/{left_motor}'
+        self.path_right = right_motor if right_motor.startswith(('/', '.')) else f'/{robot_name}/{right_motor}'
 
         self.joints = {
-            'left_wheel': self.sim.getObject(path_left),
-            'right_wheel': self.sim.getObject(path_right)
+            'left_wheel': self.path_left,
+            'right_wheel': self.path_right
         }
 
-        # Verificação de handles
-        for name, handle in self.joints.items():
-            if handle == -1:
-                raise ValueError(f"Junta '{name}' não encontrada no robô '{robot_name}'. Caminho buscado: {self.joints}")
-            
     
     # PROPRIEDADES INTEGRADAS AO COPPELIASIM
     @property
@@ -127,10 +117,10 @@ class TurtleBot(BaseBot):
         # Multiplicação matricial: [wl, wr]^T = H @ [v, omega]^T
         self._wheel_vels = self.H @ self._robot_vel
 
-        # Aplica no simulador
-        self.sim.setJointTargetVelocity(self.joints['left_wheel'], self._wheel_vels[0])
-        self.sim.setJointTargetVelocity(self.joints['right_wheel'], self._wheel_vels[1])
-
+        # Envia comados para o buffer da Bridge
+        self.bridge.queue_command('velocities', self.joints['left_wheel'], float(self._wheel_vels[0]))
+        self.bridge.queue_command('velocities', self.joints['right_wheel'], float(self._wheel_vels[1]))
+    
     def direct_cin(self, wl, wr):
         """
         MODO 2 (Piloto de Baixo Nível): Controle pelas rodas usando Cinemática Direta.
@@ -138,10 +128,10 @@ class TurtleBot(BaseBot):
         """
         self._wheel_vels = np.array([wl, wr])
         
-        # Aplica a velocidade informada diretamente nos motores do simulador
-        self.sim.setJointTargetVelocity(self.joints['left_wheel'], self._wheel_vels[0])
-        self.sim.setJointTargetVelocity(self.joints['right_wheel'], self._wheel_vels[1])
-        
+        # ENFILEIRA NO BUFFER DA BRIDGE
+        self.bridge.queue_command('velocities', self.joints['left_wheel'], float(self._wheel_vels[0]))
+        self.bridge.queue_command('velocities', self.joints['right_wheel'], float(self._wheel_vels[1]))
+
         # Atualiza o estado interno do robô (Direta) para sabermos a que velocidade o chassi está indo
         self._robot_vel = self.H_inv @ self._wheel_vels
         
@@ -149,7 +139,6 @@ class TurtleBot(BaseBot):
 
     
     # CONTROLES GERAIS
-    
     def stop(self):
         """Para as rodas."""
         self.set_wheel_velocity(0.0, 0.0)

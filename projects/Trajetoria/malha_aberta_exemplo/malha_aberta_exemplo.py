@@ -18,6 +18,7 @@ class LocomocaoTeste(BaseApp):
 
     Exemplo de um teste que herda `BaseApp`. Implementa:
     - `setup()`: captura de handles do robô
+    - `post_start()`: captura da pose inicial no instante t=0
     - `loop(t)`: geração de velocidades e captura de trajetória
     - `stop()`: finalização e plotagem dos resultados
     """
@@ -31,14 +32,22 @@ class LocomocaoTeste(BaseApp):
         """Configura recursos necessários antes da simulação começar."""
         self.logger.info("Configurando o robô para o teste...")
         
-        self.robot = PioneerBot(sim=self.sim, 
+        self.robot = PioneerBot(bridge=self.bridge, 
                                 robot_name='Pioneer_p3dx',
                                 left_motor="/Pioneer_p3dx_leftMotor",
                                 right_motor="/Pioneer_p3dx_rightMotor")
 
-        # Posição inicial do robô
-        pos = self.robot.pose
-        self.logger.info(f'Pose inicial do robô: x={pos[0]:.2f}, y={pos[1]:.2f}, theta={np.rad2deg(pos[2]):.2f}°')
+        # Instanciar usando a self.bridge
+        self.robot = PioneerBot(bridge=self.bridge, 
+                                robot_name='Pioneer_p3dx',
+                                left_motor="/Pioneer_p3dx_leftMotor",
+                                right_motor="/Pioneer_p3dx_rightMotor")
+
+        # Handshake (Avisa ao Lua o que precisa ser lido em cada ciclo)
+        monitor_paths = self.robot.get_monitor_paths()
+        actuator_paths = self.robot.get_actuator_paths()
+        self.bridge.initialize(monitor_paths, actuator_paths, self.sim)
+        self.logger.info("Handshake concluído com sucesso.")
         
         # Limites dinâmicos da simulação
         self.v_max = 1.0     # Velocidade linear máxima (m/s)
@@ -48,12 +57,21 @@ class LocomocaoTeste(BaseApp):
         self.v = 0.0         # Velocidade linear (m/s)
         self.w = 0.0         # Velocidade angular (rad/s)
 
-        # Trajetórias: real (da simulação) e referência (Lissajous)
-        # Salvamos [x, y, 0.0] para manter o formato 3D caso o Plot2D exija
-        ponto_inicial = [pos[0], pos[1], 0.0]
-        self.traj_real = [ponto_inicial.copy()]      
-        self.traj_reference = [ponto_inicial.copy()]
+        # Arrays vazios para as trajetórias (serão preenchidos no post_start)
+        self.traj_real = []      
+        self.traj_reference = []
 
+    def post_start(self):
+        """
+        AJUSTE 3: Executado após o primeiro step da Bridge.
+        Garante que a leitura da pose traga dados válidos do CoppeliaSim.
+        """
+        pos = self.robot.pose
+        self.logger.info(f'Pose inicial do robô: x={pos[0]:.2f}, y={pos[1]:.2f}, theta={np.rad2deg(pos[2]):.2f}°')
+        
+        ponto_inicial = [pos[0], pos[1], 0.0]
+        self.traj_real.append(ponto_inicial.copy())      
+        self.traj_reference.append(ponto_inicial.copy())
 
     def generate_trajectory(self, t):
         """
@@ -109,12 +127,9 @@ class LocomocaoTeste(BaseApp):
     
     def loop(self, t):
         """Executado a cada passo de simulação."""
-        
-        # Obter tempo atual
-        sim_time = self.sim.getSimulationTime()
-
         # Gerar velocidades de referência baseado na trajetória Lissajous
-        self.generate_trajectory(sim_time)
+        t = self.sim.getSimulationTime()
+        self.generate_trajectory(t)
 
         # Registrar posição de referência
         self.traj_reference.append(self.ref_pos.copy())

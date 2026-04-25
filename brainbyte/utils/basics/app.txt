@@ -1,24 +1,23 @@
 from brainbyte import BaseApp             # A aplicação básica está aqui
-from brainbyte.robots import *            # Os robôs configurados estão nessa Pasta 
+from brainbyte.robots import * # Os robôs configurados estão nessa Pasta 
 from brainbyte.control.automatic import * # Controle automático    
-from brainbyte.control.manual import *    # Controle Manual  
-
+from brainbyte.control.manual import * # Controle Manual  
+from brainbyte.core.bridge import SimulationBridge
+import numpy as np
 
 """
 @GN0MIO: Este template serve como ponto de partida para a estruturação e desenvolvimento da sua simulação.
 
-- setup(): Configuração inicial do cenário. Utilize este método para instanciar robôs, adicionar sensores e preparar o ambiente. Consulte a documentação oficial para mais detalhes.
+- setup(): Configuração inicial do cenário. Utilize este método para instanciar robôs e chamar o bridge.initialize().
+          IMPORTANTE: Agora o initialize recebe 'self.sim' para destravar o modo síncrono.
 
-- post_start(): Método de transição executado imediatamente após o setup() e antes do ciclo contínuo. Ideal para rotinas de calibração ou ações únicas de inicialização que não devem entrar no loop().
+- post_start(): Executado logo após o início real da simulação. 
+                Ideal para capturar a primeira pose ou dados de sensores após o handshake.
 
-- loop(): Núcleo de execução contínua onde a lógica principal é implementada. Atenção: O tempo de execução deste ciclo é crítico. Para cálculos pesados ou aplicações complexas, implemente soluções multi-thread para evitar travamentos (crashes) no CoppeliaSim.
+- loop(): Núcleo de execução contínua. 
+          A física avança automaticamente via self.bridge.step() (gerenciado pelo BaseApp).
 
-- stop(): Rotina de encerramento. Chamado ao finalizar a simulação, é o local correto para salvar resultados, exportar dados, gerar gráficos e limpar processos da memória.
-
-Logs e Depuração:
-Para registrar eventos na simulação, utilize a instância self.logger acompanhada do nível de severidade adequado: .info(), .debug(), .warning() ou .error().
-
-OBS: A simulação só é executada se o CoppeliaSim estiver aberto!
+- stop(): Rotina de encerramento para salvar logs, gráficos ou parar motores.
 """
 
 class {name_app}(BaseApp):
@@ -35,30 +34,32 @@ class {name_app}(BaseApp):
         try:
             self.logger.info("Configuring Robot, Sensor and Controllers...")
 
-            # Exemplo de adicionar um robô
-            # self.robot = Manta(sim=self.sim,
-                            # robot_name="Manta",
-                            # steer_name="steer_joint",
-                            # motor_name="motor_joint",
-                            # max_steer=np.deg2rad(10),
-                            # max_velocity=20)
+            # 1. Instanciar o Robô (Exemplo)
+            # self.robot = Robotino(bridge=self.bridge, robot_name="robotino")
+            
+            # 2. Obter caminhos de monitoramento (sensores/pose) e atuadores (motores)
+            # monitor_paths = self.robot.get_monitor_paths()
+            # actuator_paths = self.robot.get_actuator_paths()
+            
+            # 3. REALIZAR O HANDSHAKE (Obrigatório para o script Lua carregar os handles)
+            # Passamos self.sim para evitar o timeout no modo síncrono
+            # self.bridge.initialize(monitor_paths, actuator_paths, self.sim)
             
             self.dt = self.d_time()
-            #pos = self.robot.pose
-
-            
-            # self.logger.info(f'Initial robot position: x={{pos[0]:.2f}}, y={{pos[1]:.2f}}')
-            
-            # Exemplo de vinculação de um controlador ao robô
-            # self.robot.add_control(control_name="PID",
-            #                        control_instance=self.PID)
+            self.logger.info("Handshake with CoppeliaSim: OK!")              control_instance=self.PID)
 
         except Exception as e:
             self.logger.error(f"Error detected in setup(): {{e}}")
             
     def post_start(self):
-        """Executado uma única vez imediatamente após a inicialização da simulação, antes do loop principal."""
-        return super().post_start()
+        """Executado uma única vez após o startSimulation(). Ideal para leituras iniciais."""
+        try:
+            # Exemplo: Capturar posição inicial após a bridge estar populada
+            # pos = self.robot.pose
+            # self.logger.info(f'Initial robot position: x={{pos[0]:.2f}}, y={{pos[1]:.2f}}')
+            return super().post_start()
+        except Exception as e:
+            self.logger.error(f"Error detected in post_start(): {{e}}")
     
     def loop(self, t):
         """

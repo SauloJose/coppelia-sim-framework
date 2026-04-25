@@ -6,7 +6,7 @@ class Manta(BaseBot):
 
     def __init__(
         self,
-        sim,
+        bridge,
         robot_name: str = "Manta",
         steer_name: str = "steer_joint",
         motor_name: str = "motor_joint",
@@ -18,7 +18,7 @@ class Manta(BaseBot):
 
         Parâmetros
         ----------
-        sim : objeto de simulação (CoppeliaSim)
+        bridge : objeto para comunicar com o simulador
             Interface com o simulador.
         robot_name : str, opcional
             Nome do robô na cena, por padrão "Manta".
@@ -32,12 +32,12 @@ class Manta(BaseBot):
             Velocidade máxima que o motor irá ter, por padrão 20 m/s.
         """
 
-        super().__init__(sim, robot_name) #Aqui já foi criado o handle e o nome
+        super().__init__(bridge, robot_name) #Aqui já foi criado o handle e o nome
 
-        #Mapeamento do moto
-        self._steer_handle = self.sim.getObject(f"/{self.robot_name}/{steer_name}")
-        self._motor_handle = self.sim.getObject(f"/{self.robot_name}/{motor_name}")
-
+        # Mapeamento dos caminhos (Strings absolutas em vez de Handles numéricos)
+        self.path_steer = steer_name if steer_name.startswith(('/', '.')) else f"/{self.robot_name}/{steer_name}"
+        self.path_motor = motor_name if motor_name.startswith(('/', '.')) else f"/{self.robot_name}/{motor_name}"
+        
         #Configuração do robô
         self.motor_torque = 60
         self.motor_velocity = 0
@@ -48,37 +48,60 @@ class Manta(BaseBot):
         self.max_velocity = max_velocity
 
         self.set_torque(60)
+    # ==========================================
+    # HANDSHAKE (INICIALIZAÇÃO BATCH)
+    # ==========================================
+    def get_actuator_paths(self):
+        """Informa à Bridge quais juntas o Lua Script deve armazenar no cache."""
+        paths = super().get_actuator_paths()
+        paths.extend([self.path_steer, self.path_motor])
+        return paths
 
+    def get_monitor_paths(self):
+        """
+        Adiciona sufixos especiais para o Lua Script saber que queremos ler 
+        a posição do volante e a velocidade do motor.
+        """
+        paths = super().get_monitor_paths()
+        paths.extend([f"{self.path_steer}_jointpos", f"{self.path_motor}_jointvel"])
+        return paths
+    
+    # CONTROLE E ATUAÇÃO
     def set_torque(self, torque):
         self.motor_torque = torque
-        self.sim.setJointTargetForce(self._motor_handle, self.motor_torque)
+        self.bridge.queue_command('forces', self.path_motor, self.motor_torque)
 
     # Propriedades
     @property
     def current_steer(self) -> float:
         """Ângulo atual da junta de direção (rad)."""
-        self.steer = self.sim.getJointPosition(self._steer_handle)
+        val = self.bridge.get_sensor_data(f"{self.path_steer}_jointpos")
+        if val is not None:
+            self.steer = float(val)
         return self.steer
 
     @property
     def current_velocity(self) -> float:
         """Velocidade atual da junta do motor (unidade do simulador)."""
-        self.motor_velocity = self.sim.getJointVelocity(self._motor_handle)
+        val = self.bridge.get_sensor_data(f"{self.path_motor}_jointvel")
+        if val is not None:
+            self.motor_velocity = float(val)
         return self.motor_velocity
 
     # Métodos de controle básico
     def set_velocity(self, velocity: float, steer: float) -> None:
-            # Forçando a conversão para float nativo do Python
-            steer = float(np.clip(steer, -self.max_steer, self.max_steer))
-            velocity = float(np.clip(velocity, -self.max_velocity, self.max_velocity))
+        # Forçando a conversão para float nativo do Python (Evita bug do CBOR)
+        steer = float(np.clip(steer, -self.max_steer, self.max_steer))
+        velocity = float(np.clip(velocity, -self.max_velocity, self.max_velocity))
 
-            self.motor_velocity = velocity
-            self.steer = steer 
+        self.motor_velocity = velocity
+        self.steer = steer
 
-            self.sim.setJointTargetPosition(self._steer_handle, steer)
-            self.sim.setJointTargetVelocity(self._motor_handle, velocity)
+        # Agrupa os comandos por categoria
+        self.bridge.queue_command('positions', self.path_steer, steer)
+        self.bridge.queue_command('velocities', self.path_motor, velocity)
 
-    def set_steer(self, steer) -> None:
+    def set_steer(self, steer: float) -> None:
         """
         Controla apenas o ângulo da direção (mantém a velocidade atual).
 
@@ -89,9 +112,9 @@ class Manta(BaseBot):
         """
         steer = float(np.clip(steer, -self.max_steer, self.max_steer))
         self.steer = steer 
-        self.sim.setJointTargetPosition(self._steer_handle, steer)
+        self.bridge.queue_command('positions', self.path_steer, steer)
 
-    def set_motor_velocity(self, velocity) -> None:
+    def set_motor_velocity(self, velocity:float) -> None:
         """
         Controla apenas a velocidade do motor (mantém o ângulo atual).
 
@@ -102,7 +125,7 @@ class Manta(BaseBot):
         """
         velocity = float(np.clip(velocity, -self.max_velocity, self.max_velocity))
         self.motor_velocity = velocity
-        self.sim.setJointTargetVelocity(self._motor_handle, velocity)
+        self.bridge.queue_command('velocities', self.path_motor, velocity)
 
     def stop(self) -> None:
         """Para o motor e centraliza a direção."""

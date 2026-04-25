@@ -119,25 +119,22 @@ class LaserVisualizationExample(BaseApp):
         
         # Instancia o robô abstraindo handles e cinemática
         self.robot = PioneerBot(
-            sim=self.sim, 
+            bridge=self.bridge, 
             robot_name='PioneerP3DX',
             left_motor='leftMotor',
             right_motor='rightMotor'
         )
 
         # Initialize sensor (don't read data yet, simulation hasn't started)
-        self.hokuyo_sensor = HokuyoSensorSim(self.sim, "/PioneerP3DX/fastHokuyo")
+        self.hokuyo_sensor = HokuyoSensorSim(self.bridge, "/PioneerP3DX/fastHokuyo")
 
-        # Get initial robot position directly from the bot properties
+    def post_start(self):
+        """Executed right after simulation starts."""
+        
+        # AJUSTE 4: Lê a pose inicial aqui, pois a ponte já terá os dados no cache
         pos = self.robot.pose
         self.logger.info(f'Initial robot position: x={pos[0]:.2f}, y={pos[1]:.2f}')
 
-    def post_start(self):
-        """Executed right after simulation starts.
-
-        Useful for diagnostics and sensor initialization after startSimulation().
-        If auto_diagnostic=True, runs motor validation pulse.
-        """
         if getattr(self, 'auto_diagnostic', False):
             self.logger.info("Running automatic diagnostic: motor pulse.")
             try:
@@ -148,22 +145,22 @@ class LaserVisualizationExample(BaseApp):
     def diagnostic_pulse(self, duration=1.0, speed=0.6):
         """Send velocity pulse to motors for hardware validation."""
         self.logger.debug(f"Diagnostic pulse: v={speed}, w=0.0, duration={duration}s")
-        start = self.sim.getSimulationTime()
+        
+        # AJUSTE 5: Usa o tempo embutido no pacote da bridge e avança usando self.bridge.step()
+        start = self.bridge.latest_state.get('sim_time', 0.0)
         try:
-            # Aplica velocidade linear usando a classe do robô
             self.robot.set_wheel_velocity(speed, 0.0)
             
-            while (self.sim.getSimulationTime() - start) < duration:
-                # Step to advance simulation during pulse
-                self.sim.step()
+            while (self.bridge.latest_state.get('sim_time', 0.0) - start) < duration:
+                self.bridge.step() # Avança a física e envia os comandos em fila
         finally:
-            # Ensure motors stop safely using our abstract class
             try:
                 self.robot.stop()
+                self.bridge.step() # Garante que a fila de "stop" seja enviada pro simulador
             except Exception:
                 self.logger.exception("Failed to zero velocities after diagnostic")
             self.logger.info("Diagnostic complete: pulse finished")
-
+    
     def loop(self, t):
         """Main control loop executed at each simulation step.
 
@@ -179,7 +176,7 @@ class LaserVisualizationExample(BaseApp):
         """
         # Read laser data
         try:
-            laser_data = np.asarray(self.hokuyo_sensor.getSensorData())
+            laser_data = np.asarray(self.hokuyo_sensor.update())
             
             # Plot laser data on first execution
             if self._first_exec is True:

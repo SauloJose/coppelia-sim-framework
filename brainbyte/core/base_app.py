@@ -25,6 +25,7 @@ from brainbyte.sensors import *
 from brainbyte.robots import * 
 from brainbyte.utils.logging import setup_logger
 from brainbyte.utils import *
+from brainbyte.core.bridge import SimulationBridge 
 import traceback
     
 class BaseApp:
@@ -94,15 +95,30 @@ class BaseApp:
                 self.logger.info(f"Loading scene: {self.scene_file}...")
                 self.sim.loadScene(scene_path)
             
-            self.client.setStepping(True)
-            self.setup()
 
             self.logger.info("Starting simulation...")
             self.sim.startSimulation()
+
+            time.sleep(0.5)
+            
+            # Dentro de BaseApp.run(), depois de self.sim.startSimulation() e time.sleep(0.5)
+            self.logger.info("Acordando o servidor Lua com um passo vazio...")
+            for _ in range(3):
+                self.sim.step()           # faz o Lua executar sysCall_sensing()
+                time.sleep(0.05)
+            
+            self.bridge = SimulationBridge()
+            self.setup()
+
+
+            
             self.post_start()
             
+            current_state = self.bridge.step()
+            t = current_state.get('sim_time', 0.0)
+
             # Main loop
-            while (t := self.sim.getSimulationTime()) < self.sim_time:
+            while t  < self.sim_time:
                 try:
                     if keyboard.is_pressed('x'):
                         self.logger.warning(f"Simulation interrupted by user at t={t:.2f}s")
@@ -110,10 +126,14 @@ class BaseApp:
                 except ImportError as e:
                     # Catch errors if the user lacks the module or root privileges
                     self.logger.error("Error detected on Keyboard input (request sudo in Linux/Mac). Press Ctrl+C to stop.")
-                    
-                self.loop(t)
-                self.client.step()
                 
+                self.loop(t)
+
+                self.bridge.step()
+
+                # Atualizamos o relógio com o tempo novo que veio do Lua
+                t = current_state.get('sim_time', t + 0.05)
+
         except KeyboardInterrupt:
             self.logger.warning("Simulation manually interrupted from terminal.")
         except Exception as e:
@@ -123,14 +143,9 @@ class BaseApp:
         finally:    
             self.logger.info("Stopping simulation in finally...")
             self.stop()
+            if hasattr(self, 'bridge'):
+                self.bridge.close() # Fecha a nossa porta serial adequadamente
             self.sim.stopSimulation()
-            
-            # Clean up temporary file, if used
-            if self._temp_log_file and os.path.exists(self._temp_log_file):
-                try:
-                    os.remove(self._temp_log_file)
-                except OSError:
-                    pass
     
     # Fetch standard information 
     def d_time(self):
@@ -156,7 +171,7 @@ class BaseApp:
         """Executed right after startSimulation() (ideal for initial sensor capture)."""
         pass
 
-    def loop(self, t): 
+    def loop(self, t, actual_state = None): 
         """Executed at each simulation step (ideal for control logic and reading sensors)."""
         pass
 

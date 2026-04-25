@@ -8,27 +8,25 @@ from brainbyte.sensors import *
 
 class BaseBot(ABC):
     """
-    Classe base abstrata para qualquer robô no CoppeliaSim.
-    Fornece apenas:
-    - Acesso ao cliente da API
-    - Handle do objeto raiz do robô
-    - Handle para guardar sensores do robô
-    - Métodos comuns como obter pose e parada de emergência (opcional)
+    Classe base abstrata para qualquer robô no CoppeliaSim (Arquitetura Batch Dataflow).
+    Fornece:
+    - Acesso à Bridge de comunicação síncrona
+    - Caminho do objeto raiz do robô (String Path)
+    - Gerenciamento de sensores e controladores
+    - Métodos para declarar quais endpoints o Lua deve monitorar
     """
 
-    def __init__(self, sim, robot_name):
+    def __init__(self, bridge, robot_name):
         """
         Args:
-            sim: Objeto cliente da API do CoppeliaSim (ex.: retornado por RemoteAPIClient).
-            robot_name: Nome do objeto raiz do robô na cena.
+            bridge: Instância de SimulationBridge para comunicação em lote.
+            robot_name: Nome do objeto raiz do robô na cena (ex: 'Turtlebot3').
         """
-        self.sim = sim
+        self.bridge = bridge
         self.robot_name = robot_name
-        self.robot_handle = self.sim.getObject(f'/{robot_name}')
 
-        if self.robot_handle == -1:
-            raise ValueError(f"Robô '{robot_name}' não encontrado na cena.")
-        
+        self.robot_path = f'/{robot_name}'
+
         self._sensores =   {} #sensores associados ao robô
         self._control  =   {} #Guardo os controles do robô
 
@@ -42,6 +40,10 @@ class BaseBot(ABC):
         # pos = [x, y, z] e ori = [alpha, beta, gamma]
         pos, ori = self.get_pose() 
         
+        # Proteção para o primeiro frame (antes da bridge receber os dados)
+        if pos is None or ori is None:
+            return np.array([0.0, 0.0, 0.0])
+        
         # Para um robô planar, queremos X, Y e a rotação no eixo Z (gamma)
         x, y = pos[0], pos[1]
         theta = ori[2] 
@@ -49,28 +51,40 @@ class BaseBot(ABC):
         return np.array([x, y, theta])
 
     @pose.setter
-    def pose(self, nova_pose):
+    def pose(self, new_pose):
         """
         Teleporta o robô para uma nova pose [x, y, theta] no CoppeliaSim.
         """
-        if len(nova_pose) != 3:
+        if len(new_pose) != 3:
             raise ValueError("A pose deve conter 3 elementos: [x, y, theta].")
         
-        x, y, theta = nova_pose
+        x, y, theta = new_pose
         
         # Pegamos a pose atual para não alterar a altura (Z) 
         # e as rotações de inclinação (alpha, beta) acidentalmente.
         pos_atual, ori_atual = self.get_pose()
-        
-        z = pos_atual[2]
-        alpha = ori_atual[0]
-        beta = ori_atual[1]
-        
-        # Envia os comandos diretamente para a API do CoppeliaSim
-        # (Assumindo a sintaxe padrão da API ZeroMQ/B0 do CoppeliaSim)
-        self.sim.setObjectPosition(self.robot_handle, self.sim.handle_world, [x, y, z])
-        self.sim.setObjectOrientation(self.robot_handle, self.sim.handle_world, [alpha, beta, theta])
+        if pos_atual is None:
+            z, alpha, beta = 0.0, 0.0, 0.0
+        else:
+            z = pos_atual[2]
+            alpha = ori_atual[0]
+            beta = ori_atual[1]
 
+        # Enfileira na Bridge um comando da categoria 'teleports'
+        dados_teleporte = {'pos': [float(x), float(y), float(z)], 
+                           'ori': [float(alpha), float(beta), float(theta)]}
+        self.bridge.queue_command('teleports', self.robot_path, dados_teleporte)
+
+    def get_pose(self):
+        """
+        Lê a posição (x,y,z) e orientação (alpha,beta,gamma) absolutas diretamente 
+        do cache da Bridge, sem travar a rede.
+        """
+        # Esperamos que o Lua envie esses dados com os sufixos _pos e _ori
+        pos = self.bridge.get_sensor_data(f"{self.robot_path}_pos")
+        ori = self.bridge.get_sensor_data(f"{self.robot_path}_ori")
+        return pos, ori
+    
     # Gerenciamento de sensores
     def add_sensor(self, sensor_name, sensor_instance):
         """ 
@@ -124,16 +138,32 @@ class BaseBot(ABC):
             text += f"\n     {key} : {name}"
         text += "\n}}"
         return text 
+    
+    # ==========================================
+    # MÉTODOS DE HANDSHAKE (INICIALIZAÇÃO BATCH)
+    # ==========================================
+    def get_monitor_paths(self):
+        """
+        Coleta e retorna uma lista com os caminhos absolutos que este robô 
+        e seus sensores precisam que o Lua monitore em tempo real.
+        """
+        # O robô sempre pede para monitorar sua própria posição e orientação
+        paths = [f"{self.robot_path}_pos", f"{self.robot_path}_ori"]
+        
+        # Repassa o pedido para os sensores associados
+        for sensor in self._sensores.values():
+            if hasattr(sensor, 'get_monitor_paths'):
+                paths.extend(sensor.get_monitor_paths())
+        return paths
 
-    # Gerenciamento de posição no simulador
-    def get_pose(self, relative_to=None):
+    def get_actuator_paths(self):
         """
-        Retorna a posição (x,y,z) e orientação (alpha,beta,gamma) do robô.
+        Coleta e retorna os caminhos dos motores/atuadores deste robô.
+        A classe base retorna apenas o seu path para o teleporte (se necessário),
+        as classes filhas devem estender este método (com super()) 
+        incluindo os paths das rodas.
         """
-        ref = relative_to if relative_to is not None else self.sim.handle_world
-        pos = self.sim.getObjectPosition(self.robot_handle, ref)
-        ori = self.sim.getObjectOrientation(self.robot_handle, ref)
-        return pos, ori
+        return [self.robot_path]
     
     @abstractmethod
     def stop(self):

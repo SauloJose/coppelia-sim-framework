@@ -15,40 +15,48 @@ class PIDSimu(BaseApp):
     def setup(self):
         """Configura os recurso da simulação"""
         self.logger.info("Configurando o robô e os sensores")
-        self.robot = Manta(sim=self.sim,
+        self.robot = Manta(bridge=self.bridge,
                            robot_name="Manta",
                            steer_name="steer_joint",
                            motor_name="motor_joint",
                            max_steer=np.deg2rad(10),
                            max_velocity=20)
         
+        # AJUSTE 2: Handshake (Informa à Bridge quais dados manter em cache)
+        monitor_paths = self.robot.get_monitor_paths()
+        actuator_paths = self.robot.get_actuator_paths()
+        self.bridge.initialize(monitor_paths, actuator_paths,self.sim)
+        self.logger.info("Handshake com o CoppeliaSim concluído.")
+
         self.dt = self.d_time()
-        pos = self.robot.pose
-        self.logger.info(f'Initial robot position: x={pos[0]:.2f}, y={pos[1]:.2f}')
-        
-        
-        #Definido para teste um controlador onoff
+
+        # Definido para teste um controlador onoff
         self.OnOff = On_Off_Controller(var=1, 
-                               set_point=0, 
-                               u_max=0.17,      # ~10 graus em radianos para a direita
-                               u_min=-0.17,     # ~10 graus em radianos para a esquerda
-                               hysteresis=0.05) # Só muda a roda se o erro passar de 5cm
+                                       set_point=0, 
+                                       u_max=0.17,      # ~10 graus em radianos para a direita
+                                       u_min=-0.17,     # ~10 graus em radianos para a esquerda
+                                       hysteresis=0.05) # Só muda a roda se o erro passar de 5cm
         
-        #Definindo o PID 
+        # Definindo o PID 
         self.PID = PID_Controller(var=1,
                                   kp=4,
                                   kd=3,
                                   ki=0.1,
                                   set_point=0,
-                                  dt =self.dt)
+                                  dt=self.dt)
         
         self.robot.add_control(control_name="PID",
-                               control_instance=self.PID) 
+                               control_instance=self.PID)
 
 
     def post_start(self):
-        """ É executado logo quando inicia a simulação"""
-        return super().post_start()
+        """ Executado logo após o primeiro frame da simulação """
+        super().post_start()
+        
+        # AJUSTE 3: Lemos a pose inicial aqui, pois agora o cache da ponte está preenchido!
+        pos = self.robot.pose
+        self.logger.info(f'Initial robot position: x={pos[0]:.2f}, y={pos[1]:.2f}')
+
     
     def loop(self, t):
         """ Etapas do loop"""

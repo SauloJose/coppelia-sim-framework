@@ -33,24 +33,26 @@ class LocomocaoMF(BaseApp):
         self.logger.info("Configurando o robô para o teste...")
         
         # Instanciando abstração para o robô
-        self.robot = PioneerBot(sim=self.sim, 
+        self.robot = PioneerBot(bridge=self.bridge, 
                                 robot_name='Pioneer_p3dx',
                                 left_motor="/Pioneer_p3dx_leftMotor",
                                 right_motor="/Pioneer_p3dx_rightMotor")
 
-        # Posição inicial do robô
-        pos = self.robot.pose
-        self.logger.info(f'Pose inicial do robô: x={pos[0]:.2f}, y={pos[1]:.2f}, theta={np.rad2deg(pos[2]):.2f}°')
-        
+        # Informa à Bridge quais dados o Lua deve colocar em cache
+        # O robô sabe do que ele e seus sensores precisam
+        monitor_paths = self.robot.get_monitor_paths()
+        actuator_paths = self.robot.get_actuator_paths()
+        self.bridge.initialize(monitor_paths, actuator_paths, self.sim)
+        self.logger.info("Handshake com o CoppeliaSim concluído com sucesso.")
+
         # Limites dinâmicos da simulação
         self.v_max = 5     # Velocidade linear máxima (m/s)
-        self.w_max = 2.0     # Velocidade angular máxima (rad/s)
+        self.w_max = 2.0   # Velocidade angular máxima (rad/s)
 
-        # Passo da simulação:
+        # Passo da simulação
         self.dt = self.d_time()
-
         
-        # Variáveis de controle
+        # Variáveis de controle PID
         self.pid_v = PID_Controller(
             var=0.0, kp=2, ki=0.0, kd=0.1, dt=self.dt, set_point=0.0
         )
@@ -63,12 +65,20 @@ class LocomocaoMF(BaseApp):
         self.w_ff = 0.0      
         self.theta_ref = 0.0
 
-        # Trajetórias: real (da simulação) e referência (Lissajous)
-        # Salvamos [x, y, 0.0] para manter o formato 3D caso o Plot2D exija
-        ponto_inicial = [pos[0], pos[1], 0.0]
-        self.traj_real = [ponto_inicial.copy()]      
-        self.traj_reference = [ponto_inicial.copy()]
+        # Arrays para plotagem
+        self.traj_real = []      
+        self.traj_reference = []
 
+    def post_start(self):
+        """ É executado logo depois que a bridge dá o primeiro step """
+        # Como o primeiro step já ocorreu, a pose do robô não é mais vazia
+        pos = self.robot.pose
+        self.logger.info(f'Pose inicial do robô: x={pos[0]:.2f}, y={pos[1]:.2f}, theta={np.rad2deg(pos[2]):.2f}°')
+        
+        # Armazena o ponto inicial
+        ponto_inicial = [pos[0], pos[1], 0.0]
+        self.traj_real.append(ponto_inicial.copy())      
+        self.traj_reference.append(ponto_inicial.copy())
 
     def generate_trajectory(self, t):
         """Gera velocidades de referência (Feedforward) e a pose ideal."""
@@ -112,18 +122,16 @@ class LocomocaoMF(BaseApp):
         self.ref_pos = np.array([x_ref, y_ref, 0.0])
 
     def loop(self, t):
+        t = self.sim.getSimulationTime()
         """Executado a cada passo de simulação."""
-        
-        # Obter tempo atual
-        sim_time = self.simu_time()
-
         # Gerar velocidades de referência baseado na trajetória Lissajous
-        self.generate_trajectory(sim_time)
+        self.generate_trajectory(t)
         self.traj_reference.append(self.ref_pos.copy())
 
         # Obter a pose real
         pos_real = self.robot.pose
         x_real, y_real, theta_real = pos_real[0], pos_real[1], pos_real[2]
+        
         self.traj_real.append([x_real, y_real, 0.0])
 
         #Calcular os Erros para o PID

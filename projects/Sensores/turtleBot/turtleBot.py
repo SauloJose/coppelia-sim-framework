@@ -51,7 +51,7 @@ class turtleBot(BaseApp):
         self.logger.info("Configuring Robot, Sensor and Controllers..")
 
         # Exemplo de adicionar um robô
-        self.robot = TurtleBot(sim=self.sim,
+        self.robot = TurtleBot(bridge=self.bridge,
                                robot_name='Turtlebot3', 
                                left_motor='left_motor', 
                                right_motor='right_motor',
@@ -59,22 +59,22 @@ class turtleBot(BaseApp):
                               )
         
         # Sensores do robô
-        self.Lidar = LDS_02(sim=self.sim, base_name= 'Turtlebot3')
+        self.Lidar = LDS_02(bridge=self.bridge, base_name= 'Turtlebot3')
 
         self.robot.add_sensor(sensor_name='LIDAR',sensor_instance=self.Lidar)
+
+        # AJUSTE 3: Handshake com o CoppeliaSim (NOVO)
+        monitor_paths = self.robot.get_monitor_paths()
+        actuator_paths = self.robot.get_actuator_paths()
+        self.bridge.initialize(monitor_paths, actuator_paths, self.sim)
 
         # Controladores do robô
         v_max = 0.2
         w_max = np.deg2rad(20)
         self.control = KeyboardController(v_max=v_max, w_max=w_max)
 
-
         # Variáveis computadas 
         self.dt = self.d_time()
-        pos = self.robot.pose
-
-        # CHAVES DUPLAS AQUI:
-        self.logger.info(f'Initial robot position: x={pos[0]:.2f}, y={pos[1]:.2f}')
 
         #Buffers para os pontos calculados
         self.buffer = PointCloudAccumulator(max_point=100000)
@@ -90,10 +90,16 @@ class turtleBot(BaseApp):
 
     def post_start(self):
         """ É executado logo quando inicia a simulação"""
-        return super().post_start()
+        super().post_start()
+        
+        # AJUSTE 4: Lemos a pose inicial aqui, pois a ponte já terá os dados no cache
+        pos = self.robot.pose
+        self.logger.info(f'Initial robot position: x={pos[0]:.2f}, y={pos[1]:.2f}')
+
     
     def define_plot_configs(self):
         """ Configurações de plot """
+        self.plot_counter = 0
 
         plt.ion() #Ativa modo interativo
         self.fig, self.ax = plt.subplots()
@@ -123,18 +129,18 @@ class turtleBot(BaseApp):
             data_sensor = self.robot.get_sensor(sensor_name='LIDAR').update() #Puxando dados do LIDAR
             #self.buffer.add(data_sensor)
 
-            # Atualiza plot do lidar
-            lx = data_sensor[:,0]
-            ly = data_sensor[:,1]
-            self.plot_lidar.set_data(lx,ly)
-            
-            #Atualiza plot do robô
-            pos = self.robot.pose
-            self.plot_robot.set_data([pos[0]],[pos[1]])
+            # --- Atualiza plot do lidar com limite de FPS ---
+            self.plot_counter += 1
+            if self.plot_counter % 2 == 0:
+                lx = data_sensor[:,0]
+                ly = data_sensor[:,1]
+                self.plot_lidar.set_data(lx, ly)
+                
+                pos = self.robot.pose
+                self.plot_robot.set_data([pos[0]], [pos[1]])
 
-            # Exibe o canvas
-            self.fig.canvas.draw()
-            self.fig.canvas.flush_events()
+                self.fig.canvas.draw()
+                self.fig.canvas.flush_events()
 
         except Exception as e:
             # CHAVES DUPLAS AQUI:

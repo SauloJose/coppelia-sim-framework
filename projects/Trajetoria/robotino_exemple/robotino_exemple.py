@@ -2,7 +2,6 @@ from brainbyte import BaseApp
 from brainbyte.robots.movel.Robotino import *
 
 
-
 class RobotinoSimu(BaseApp):
     """
         Teste de locomoção de obstáculos do robotino
@@ -16,24 +15,33 @@ class RobotinoSimu(BaseApp):
         self.logger.info("Configurando o robô e os sensores")
 
         # Instancio o robô para abstrair comandos
-        self.robot = Robotino(sim=self.sim, 
+        self.robot = Robotino(bridge=self.bridge, 
                             robot_name='robotino')
         
-        pos = self.robot.pose
-        self.logger.info(f'Initial robot position: x={pos[0]:.2f}, y={pos[1]:.2f}')
+        
+        # PEGA OS CAMINHOS DO PRÓPRIO ROBÔ (Chassi e Motores)
+        monitor_paths = self.robot.get_monitor_paths()
+        actuator_paths = self.robot.get_actuator_paths()
+    
+        # Envia a lista de inicialização para a bridge
+        self.bridge.initialize(monitor_paths, actuator_paths,self.sim)
+        self.logger.info("Handshake com a Bridge concluído!")
 
     def post_start(self):
         """ É executado logo quando inicia a simulação"""
-        return super().post_start()
+        super().post_start()
+        
+        # A leitura da pose deve ficar aqui, após o cache da bridge ser preenchido!
+        pos = self.robot.pose
+        self.logger.info(f'Initial robot position: x={pos[0]:.2f}, y={pos[1]:.2f}')
     
     def loop(self, t):
         """ Etapas do loop"""
         try:
             #Lógica de enviar velocidades
-            sim_t = self.sim.getSimulationTime()
-            if sim_t <= 10:
+            if t <= 10:
                 self.robot.set_velocity_rot([5,5], 0)
-            elif sim_t <= 30:
+            elif t <= 30:
                 self.robot.direct_cin(10,-10,10)
             else:
                 self.robot.direct_cin(10,-10,-10)

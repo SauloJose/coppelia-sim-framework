@@ -73,14 +73,19 @@ class ObstacleAvoidanceTester(BaseApp):
         self.logger.info("Configurando o robô para o teste...")
         
         # Instancia o robô usando a nova classe 
-        self.robot = PioneerBot(sim=self.sim, robot_name='PioneerP3DX')
+        self.robot = PioneerBot(bridge=self.bridge, robot_name='PioneerP3DX')
 
         # Usa a propriedade integrada para ver a pose inciial
         self.logger.info(f'Pose inicial do robô (x,y,theta): {self.robot.pose}')
 
         # Instancia o sensor (usando o nome dinâmico do robô)
-        self.hokuyo_sensor = HokuyoSensorSim(self.sim, 
+        self.hokuyo_sensor = HokuyoSensorSim(self.bridge, 
                                              f"/{self.robot.robot_name}/fastHokuyo")
+
+        # Junta os caminhos de monitoramento do robô e do sensor num só pacote
+        monitor_paths = self.robot.get_monitor_paths() + self.hokuyo_sensor.get_monitor_paths()
+        actuator_paths = self.robot.get_actuator_paths()
+        self.bridge.initialize(monitor_paths, actuator_paths)
 
         # Pré-calcular índices do sensor (economiza operações no loop)
         self.sensor_n_points = 684
@@ -91,9 +96,14 @@ class ObstacleAvoidanceTester(BaseApp):
 
     def post_start(self):
         """Executado logo após a simulação iniciar - captura primeira imagem do sensor LIDAR."""
+        
+        # AJUSTE 4: Usa a propriedade integrada para ver a pose inicial aqui (cache já preenchido)
+        self.logger.info(f'Pose inicial do robô (x,y,theta): {self.robot.pose}')
+        
         self.logger.info("Capturando primeira imagem do sensor LIDAR...")
         try:
-            laser_data = np.asarray(self.hokuyo_sensor.getSensorData())
+            # AJUSTE 5: Usa o novo método nativo update() para ler do cache (Zero-Lag)
+            laser_data = np.asarray(self.hokuyo_sensor.update())
             
             # Validar forma do array (deve ser 2D: [pontos, 2])
             if laser_data is None or laser_data.size == 0:
@@ -118,7 +128,7 @@ class ObstacleAvoidanceTester(BaseApp):
         """Executado a cada passo da simulação."""
         # Ler dados do LIDAR UMA VEZ por ciclo de simulação
         try:
-            laser_data = np.asarray(self.hokuyo_sensor.getSensorData())
+            laser_data = np.asarray(self.hokuyo_sensor.update())
         except Exception as e:
             self.logger.error(f"Erro ao ler sensor LIDAR: {e}")
             return
@@ -190,7 +200,7 @@ if __name__ == "__main__":
         app()
     except Exception as e:
         print("\n" + "="*50)
-        print("💥 ERRO FATAL CAPTURADO:")
+        print(" ERRO FATAL CAPTURADO:")
         traceback.print_exc()
         print("="*50 + "\n")
         input("Pressione ENTER para sair...") # Pausa a tela para você conseguir ler

@@ -1,7 +1,8 @@
 import math
 import numpy as np
+from brainbyte.sensors.base.base_sensor import *
 
-class LDS_02(object):
+class LDS_02(BaseSensor):
     """
     Simulates an LDS_02 LiDAR sensor in CoppeliaSim.
 
@@ -10,7 +11,7 @@ class LDS_02(object):
     frame and optionally transforms it to world coordinates.
 
     Args:
-        sim: CoppeliaSim simulation API object.
+        bridge: CoppeliaSim simulation API object to send data.
         base_name (str): Full path to the vision sensor object in the scene.
         max_cache_points (int, optional): Max total points to keep in the
             accumulated cache. None means no limit.
@@ -20,7 +21,7 @@ class LDS_02(object):
     _lidar_point_cloud_handle_template = "/{}/{}/{}"    #ex:  base_name/scan_joint/point_cloud
     
     def __init__(self,
-                 sim,
+                 bridge,
                  base_name,         # robot name
                  point_cloud_name   ='point_cloud',
                  base_link_name     = 'base_link',
@@ -28,55 +29,60 @@ class LDS_02(object):
                  scan_name          = 'laser_joint',
                  is_range_data      = False):
         
-        self._sim = sim
+        lidar_path = f"/{base_name}/{scan_joint_name}"
+
+        super().__init__(bridge, sensor_path=lidar_path)
+
         self._base_name = base_name
-        self._point_cloud_name = point_cloud_name
-        self._base_link_name = base_link_name
-        self._scan_joint_name = scan_joint_name
         self._is_range_data = is_range_data
 
-        lidar_path = self._lidar_handle_template.format(base_name,scan_joint_name) 
-        point_cloud_path = self._lidar_point_cloud_handle_template.format(base_name, scan_joint_name, point_cloud_name)
-        base_path = self._lidar_base_handle_template.format(base_name, base_link_name)
+        # Constrói as strings de caminho absoluto
+        self._lidar_path = self._lidar_handle_template.format(base_name, scan_joint_name) 
+        self._point_cloud_path = self._lidar_point_cloud_handle_template.format(base_name, scan_joint_name, point_cloud_name)
+        self._base_path = self._lidar_base_handle_template.format(base_name, base_link_name)
         
         #Debug
-        print(f"[DEBUG] [LDS_02]: point LIDAR handle: '{lidar_path}'")
-        print(f"[DEBUG] [LDS_02]: point BASE handle: '{base_path}'")
-        print(f"[DEBUG] [LDS_02]: cloud point handle: '{point_cloud_path}'")
-
-        # handles from Coppelia
-        self._lidar_handle = self._sim.getObject(lidar_path)
-        self._point_cloud_handle = None
-        self._point_cloud_path = point_cloud_path
+        print(f"[DEBUG] [LDS_02]: point LIDAR handle: '{self._lidar_path}'")
+        print(f"[DEBUG] [LDS_02]: point BASE handle: '{self._base_path}'")
+        print(f"[DEBUG] [LDS_02]: cloud point handle: '{self._point_cloud_path}'")
 
         # last frame 
         self._last_points_local = np.empty((0, 3))
         self._last_points_world = np.empty((0, 3))
-        
-    def _get_point_cloud_handle(self):
-        if self._point_cloud_handle is None:
-                point_cloud_handle = self._point_cloud_handle =self._sim.getObject(self._point_cloud_path)
-        return self._point_cloud_handle
+    
+    def get_monitor_paths(self) -> list:
+        """ Estende o método da BaseSensor pedindo a matriz e a nuvem de pontos """
+        return [
+            f"{self.sensor_path}_matrix",      # Para transformar pra World
+            f"{self._point_cloud_path}_ptcloud" # Os pontos brutos
+        ]
     
     def _read_lidar(self):
-        """read all points of the PointCloud in the local frame sensor."""
-        pc_handle = self._get_point_cloud_handle()
-        res = self._sim.getPointCloudPoints(pc_handle)
-        if not res:
-            return np.array([]).reshape(0, 3)
+        """Read all points of the PointCloud in the local frame sensor directly from Bridge cache."""
+        
+        # ADICIONADO O '_bin' AQUI NO FINAL DA STRING:
+        raw_points = self.bridge.get_sensor_data(f"{self._point_cloud_path}_ptcloud_bin")
+        
+        if raw_points is None or len(raw_points) == 0:
+            self._last_points_local = np.empty((0, 3))
+            return self._last_points_local
 
-        # Transforma a lista flat em matriz (N, 3)
-        points = np.array(res).reshape(-1, 3)
+        # Transforma a lista 1D de floats nativa do C++ em matriz (N, 3)
+        points = raw_points.reshape(-1, 3)
         self._last_points_local = points
         return points
     
     def _transform_to_world(self, points):
         """Convert points from sensor local frame to world frame using homogeneous matrix."""
         if points.size == 0:
+            self._last_points_world = points
             return points
         
-        # Get the sensor's transformation matrix (3x4) and convert to 4x4
-        m = self._sim.getObjectMatrix(self._lidar_handle, -1)
+        # Pega a matriz de transformação (já processada no frame atual) sem chamar a rede
+        m = self.bridge.get_sensor_data(f"{self._lidar_path}_matrix")
+        if m is None:
+            return points # Fallback de segurança
+
         h_matrix = np.array(m).reshape(3, 4)
         h_matrix = np.vstack([h_matrix, [0, 0, 0, 1]])
 
@@ -92,14 +98,11 @@ class LDS_02(object):
     
     def update(self):
         """
-        Read the point cloud and transform to world coordinates.
-
-        Returns:
-            np.ndarray: World-frame points with shape (N, 3).
+        Read the point cloud and transform to world coordinates (Zero-lag).
+        Returns: np.ndarray: World-frame points with shape (N, 3).
         """
         local_pts = self._read_lidar()
         world_pts = self._transform_to_world(local_pts)
-
         return world_pts
     
     def get_cloud_points(self, world_coordinates=True):
@@ -123,7 +126,6 @@ class LDS_02(object):
     @is_range_data.setter
     def is_range_data(self, value):
         self._is_range_data = value
-
 
 
 
