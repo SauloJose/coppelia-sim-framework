@@ -20,14 +20,14 @@ import numpy as np
 - stop(): Rotina de encerramento para salvar logs, gráficos ou parar motores.
 """
 
-class {name_app}(BaseApp):
+class Teste(BaseApp):
     """
-    Classe principal da simulação {name_app}.
+    Classe principal da simulação Teste.
     Gerencia o ciclo de vida da aplicação, integrando a lógica de controle com a cena do CoppeliaSim.
     """
     def __init__(self):
         """Inicializa os parâmetros base da aplicação, definindo a cena e o tempo total de simulação."""
-        super().__init__(scene_file="{name_scene}.ttt", sim_name="{name_app}", sim_time={simulation_time})
+        super().__init__(scene_file="TesteCena.ttt", sim_name="Teste", sim_time=120)
 
     def setup(self):
         """Configura os recursos iniciais da simulação (instanciação de robôs, sensores e controladores)."""
@@ -37,13 +37,6 @@ class {name_app}(BaseApp):
             # 1. Instanciar o Robô (Exemplo)
             # self.robot = Robotino(bridge=self.bridge, robot_name="robotino")
             
-            #Exemplo de adicionar um sensor 
-            # Instancia o sensor (usando o nome dinâmico do robô)
-            #self.hokuyo_sensor = HokuyoSensorSim(self.bridge, 
-            #                                 f"/{self.robot.robot_name}/fastHokuyo",True)
-            #
-            #
-            #self.robot.add_sensor("LIDAR",self.hokuyo_sensor)
             # 2. Obter caminhos de monitoramento (sensores/pose) e atuadores (motores)
             # monitor_paths = self.robot.get_monitor_paths()
             # actuator_paths = self.robot.get_actuator_paths()
@@ -53,20 +46,20 @@ class {name_app}(BaseApp):
             # self.bridge.initialize(monitor_paths, actuator_paths, self.sim)
             
             self.dt = self.d_time()
-            self.logger.info("Handshake with CoppeliaSim: OK!")  
+            self.logger.info("Handshake with CoppeliaSim: OK!")              control_instance=self.PID)
 
         except Exception as e:
-            self.logger.error(f"Error detected in setup(): {{e}}")
+            self.logger.error(f"Error detected in setup(): {e}")
             
     def post_start(self):
         """Executado uma única vez após o startSimulation(). Ideal para leituras iniciais."""
         try:
             # Exemplo: Capturar posição inicial após a bridge estar populada
             # pos = self.robot.pose
-            # self.logger.info(f'Initial robot position: x={{pos[0]:.2f}}, y={{pos[1]:.2f}}')
+            # self.logger.info(f'Initial robot position: x={pos[0]:.2f}, y={pos[1]:.2f}')
             return super().post_start()
         except Exception as e:
-            self.logger.error(f"Error detected in post_start(): {{e}}")
+            self.logger.error(f"Error detected in post_start(): {e}")
     
     def loop(self, t):
         """
@@ -77,7 +70,7 @@ class {name_app}(BaseApp):
             # Adicione a lógica do loop aqui
             pass 
         except Exception as e:
-            self.logger.error(f"Error detected in loop(): {{e}}")
+            self.logger.error(f"Error detected in loop(): {e}")
 
     def stop(self):
         """Rotina de encerramento para garantir a parada segura dos componentes e exportação de resultados."""
@@ -86,12 +79,12 @@ class {name_app}(BaseApp):
             # self.robot.stop()
             pass
         except Exception as e:
-            self.logger.error(f"Error detected in stop(): {{e}}")
+            self.logger.error(f"Error detected in stop(): {e}")
 
 def app():
     """
     Ponto de entrada principal da simulação. 
     Instancia a classe e inicia o ciclo de vida (run) para integração com o gerenciador BRAINBYTE.
     """
-    aplicacao = {name_app}()
+    aplicacao = Teste()
     aplicacao.run()
