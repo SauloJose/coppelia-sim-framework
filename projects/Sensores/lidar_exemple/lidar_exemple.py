@@ -72,7 +72,7 @@ def draw_laser_data(laser_data, max_sensor_range=5, show=False, save_path=None):
     else:
         # Default: save to a timestamped file to avoid blocking
         timestamp = int(time.time())
-        filename = f'laser_plot_{timestamp}.png'
+        filename = f'/projects/Sensores/lidar_exemple/Figures/laser_plot_{timestamp}.png'
         fig.savefig(filename)
         plt.close(fig)
         print(f"Laser plot saved to: {filename}")

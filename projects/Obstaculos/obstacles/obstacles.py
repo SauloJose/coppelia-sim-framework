@@ -14,15 +14,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import time
 import traceback
+import os 
 
 def draw_laser_data(laser_data, max_sensor_range=5, save_path=None):
-    """Plota cinemática do laser em um gráfico 2D.
-    
-    Args:
-        laser_data: Array com dados [ângulo, distância]
-        max_sensor_range: Alcance máximo do sensor
-        save_path: Caminho para salvar a imagem. Se None, usa timestamp.
-    """
+    """Plota cinemática do laser em um gráfico 2D."""
     fig = plt.figure(figsize=(6, 6), dpi=100)
     ax = fig.add_subplot(111, aspect='equal')
 
@@ -43,9 +38,22 @@ def draw_laser_data(laser_data, max_sensor_range=5, save_path=None):
     ax.set_ylabel('Y (m)')
     ax.legend()
 
-    # Salvar com timestamp se não especificado
+    # Tratamento de caminho seguro
     if save_path is None:
-        save_path = f'laser_plot_{int(time.time())}.png'
+        # Pega a pasta atual onde o script está rodando
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        # Monta o caminho para a pasta Figures
+        figures_dir = os.path.join(current_dir, '/projects/Obstaculos/obstacles/Figures')
+        
+        # Garante que a pasta existe (se não existir, ele cria)
+        os.makedirs(figures_dir, exist_ok=True)
+        
+        # Cria o nome do arquivo com timestamp para não perder o histórico
+        nome_arquivo = f'laser_plot_{int(time.time())}.png'
+        
+        # Caminho final completo
+        save_path = os.path.join(figures_dir, nome_arquivo)
     
     fig.savefig(save_path, dpi=100)
     plt.close(fig)
