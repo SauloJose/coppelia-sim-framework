@@ -1,203 +1,194 @@
-# CoppeliaSim Framework Architecture
+# Arquitetura do Framework CoppeliaSim
 
-## Overview
+## Visão Geral
 
-The CoppeliaSim Framework is a professional Python package designed to simplify robot control and simulation using CoppeliaSim's ZMQ remote API. It provides:
+O Framework CoppeliaSim é um pacote Python profissional projetado para simplificar o controle de robôs e a simulação usando a API remota ZMQ do CoppeliaSim. Ele fornece:
 
-- **BaseApp**: A base class that handles the simulation lifecycle
-- **Professional Logging**: Standardized, emoji-free logging system
-- **Visualization Tools**: Built-in 2D and 3D plotting functions
-- **Best Practices**: Structured examples and documentation
+- **BaseApp**: Uma classe base que gerencia o ciclo de vida da simulação.
+- **SimulationBridge**: Uma ponte de comunicação de altíssima performance baseada em lotes (Batch Dataflow) e CBOR.
+- **Logging Profissional**: Sistema de logs padronizado e limpo.
+- **Ferramentas de Visualização**: Funções integradas para plotagem 2D e 3D.
+- **Melhores Práticas**: Exemplos estruturados e arquitetura orientada a objetos.
 
-## Directory Structure
+## Estrutura de Diretórios
 
-```
+```text
 coppelia_sim_framework/
-├── __init__.py              # Package exports
+├── __init__.py              # Exportações do pacote
 ├── core/
 │   ├── __init__.py
-│   ├── base_app.py          # BaseApp class - simulation lifecycle management
-│   └── logging.py           # ProfessionalFormatter and setup_logger()
+│   ├── base_app.py          # Classe BaseApp - ciclo de vida da simulação
+│   ├── bridge.py            # SimulationBridge - comunicação ZMQ/CBOR em lote
+│   └── logging.py           # ProfessionalFormatter e setup_logger()
 ├── utils/
 │   ├── __init__.py
-│   └── plotting.py          # Plot2D() and Plot3D() visualization functions
-├── sensors/                 # Sensor implementations (future)
-├── robots/                  # Robot definitions (future)
-└── gui/                     # GUI components (future)
+│   └── plotting.py          # Funções de visualização Plot2D() e Plot3D()
+├── sensors/                 # Implementações de sensores (ex: LDS_02)
+├── robots/                  # Definições de robôs (ex: TurtleBot)
+└── gui/                     # Componentes de interface de usuário
 
-projects/                     # Example applications
+projects/                    # Aplicações de exemplo
 ├── __init__.py
 ├── exemple/
 │   ├── __init__.py
-│   ├── exemple.py            # Main aplication 
-│   └── scene.ttt             # scene of coppelia
-tests/                        # Unit and integration tests
+│   ├── exemple.py           # Aplicação principal
+│   └── scene.ttt            # Cena do CoppeliaSim
+tests/                       # Testes unitários e de integração
 ├── __init__.py
 └── test_framework.py
 
-docs/                         # Documentation
-├── ARCHITECTURE.md           # This file
-├── API.md                    # API reference
-├── CONTRIBUTING.md           # Contributing guidelines
-└── TUTORIALS.md              # Step-by-step tutorials
+docs/                        # Documentação
+├── ARCHITECTURE.md          # Este arquivo
+├── API.md                   # Referência da API
+├── CONTRIBUTING.md          # Diretrizes de contribuição
+└── TUTORIALS.md             # Tutoriais passo-a-passo
 
-scripts/                      # Utility scripts
-config/                       # Configuration files
+scripts/                     # Scripts utilitários
+config/                      # Arquivos de configuração
 
-main.py                       # Interactive menu for running examples
-setup.py                      # Package setup for pip installation
-pyproject.toml               # Modern Python project metadata
-requirements-dev.txt         # Development dependencies
-README.md                    # Main documentation
-.gitignore                   # Git ignore rules
+main.py                      # Menu interativo para rodar os exemplos
+setup.py                     # Configuração para instalação via pip
+pyproject.toml               # Metadados modernos do projeto Python
+requirements-dev.txt         # Dependências de desenvolvimento
+README.md                    # Documentação principal
+.gitignore                   # Regras de ignorar do Git
 ```
 
-## Module Responsibilities
+## Arquitetura de Comunicação em Lote (Batch Dataflow)
+
+A característica mais poderosa deste framework é a sua ponte de comunicação (`SimulationBridge`). Em vez de fazer dezenas de chamadas de rede isoladas por frame para ler sensores e enviar velocidades (o que causaria um enorme gargalo de rede), o sistema funciona com o conceito de **Servidor de Fluxo de Dados em Lote Síncrono**.
+
+1. **Handshake e Pré-Cache (`INIT`)**: Antes da simulação rodar, o Python envia uma lista de todos os caminhos dos objetos que ele deseja atuar ou monitorar. O CoppeliaSim (via script Lua) faz a busca dessas IDs ("handles") uma única vez e os guarda na memória.
+2. **Buffer de Comandos (`queue_...`)**: Durante o loop de controle, o robô não envia comandos imediatamente. Métodos como `queue_velocity` ou `queue_position` apenas adicionam as intenções de movimento a um "carrinho de compras" virtual no Python.
+3. **Passo Síncrono (`step`)**: Uma vez por frame, a ponte pega todos os comandos acumulados e os envia em um **único pacote binário ultrarrápido (CBOR)** via ZeroMQ.
+4. **Captura Global (Sensores)**: O CoppeliaSim aplica os comandos, avança exatamente 1 frame da física e empacota o estado de todos os sensores solicitados (incluindo nuvens de pontos LiDAR, matrizes e telemetria) em um pacote de resposta.
+5. **Acesso com Atraso Zero**: Quando as classes de sensores (como a `LDS_02`) precisam ler os dados, elas não acessam a rede. Elas simplesmente consultam o dicionário `latest_state` salvo na memória local do Python, garantindo tempo de execução na casa dos microssegundos.
+
+## Responsabilidades dos Módulos
 
 ### core.base_app
 
-**Purpose**: Manages the simulation lifecycle
+**Propósito**: Gerenciar o ciclo de vida da simulação.
 
-- Handles connection to CoppeliaSim
-- Loads scenes
-- Manages simulation steps
-- Provides hooks: `setup()`, `post_start()`, `loop(t)`, `stop()`
+- Lida com a inicialização da `SimulationBridge`.
+- Carrega as cenas.
+- Gerencia o tempo e os passos de simulação (Stepping).
+- Fornece ganchos (hooks): `setup()`, `post_start()`, `loop(t)`, `stop()`.
 
-**Key Class**: `BaseApp`
+### core.bridge
 
-```python
-class BaseApp:
-    def __init__(self, scene_file=None, sim_time=10.0)
-    def setup(self)           # Override: configure before simulation
-    def post_start(self)      # Override: execute after simulation starts
-    def loop(self, t)         # Override: called each simulation step
-    def stop(self)            # Override: cleanup after simulation
-    def run(self)             # Main loop - orchestrates everything
-```
+**Propósito**: Ponte de baixo nível entre o Python e o motor Lua do CoppeliaSim.
+
+- Gerencia o socket ZMQ (REQ/REP).
+- Enfileira comandos (`queue_velocity`, `queue_position`, `queue_command`).
+- Transforma dados usando o formato binário CBOR para suportar matrizes Numpy nativas (LiDAR e Visão) sem erros de decodificação.
 
 ### core.logging
 
-**Purpose**: Professional logging system without emojis
+**Propósito**: Sistema de logging profissional.
 
-- Standardized log format: `[LEVEL] [ORIGIN] [TIMESTAMP] message`
-- Easy logger creation with `setup_logger()`
+- Formato padronizado: `[LEVEL] [ORIGIN] [TIMESTAMP] mensagem`.
+- Evita que travamentos silenciosos passem despercebidos.
 
-**Key Classes/Functions**:
-- `ProfessionalFormatter`: Custom logging formatter
-- `setup_logger(name, origin_prefix)`: Logger factory function
+## Fluxo de Execução
 
-### utils.plotting
-
-**Purpose**: Visualization of robot trajectories
-
-- `Plot2D(data, x_label, y_label, ...)`: 2D trajectory visualization
-- `Plot3D(data, x_label, y_label, z_label, ...)`: 3D trajectory visualization
-
-Both functions automatically mark start (green dot) and end (red star) points.
-
-## Execution Flow
-
-```
+```text
 ┌─────────────────────────────────────────┐
 │  main.py                                │
-│  (Interactive menu to select examples)  │
+│  (Menu interativo de exemplos)          │
 └──────────────────┬──────────────────────┘
                    │
-                   ├─→ locomocao_example.py
-                   │   └→ LocomocaoTeste(BaseApp)
-                   │       └→ app() function triggers .run()
-                   │
-                   └─→ obstacle_avoidance_example.py
-                       └→ ObstacleAvoidanceTester(BaseApp)
-                           └→ app() function triggers .run()
+                   └─→ turtlebot_example.py
+                       └→ TurtleBotApp(BaseApp)
+                           └→ app() aciona .run()
 
-When .run() is called:
-1. Load scene
-2. Configure ZMQ stepping mode
-3. Call setup() [OVERRIDE THIS]
-4. Start simulation
-5. Call post_start() [OVERRIDE THIS]
-6. Loop:
-   - Check for user interrupt ('s' key)
-   - Call loop(t) [OVERRIDE THIS]
-   - Advance simulation step
-7. On exit:
-   - Call stop() [OVERRIDE THIS]
-   - Stop simulation
+Quando .run() é chamado:
+1. Carrega a cena (.ttt).
+2. Conecta ao ZMQ e envia modo Síncrono.
+3. Chama setup() [VOCÊ SOBRESCREVE ISTO] - Inicia sensores e robôs.
+4. Bridge envia pacote INIT (Handshake de handles).
+5. Inicia a Simulação.
+6. Chama post_start() [VOCÊ SOBRESCREVE ISTO].
+7. Loop principal:
+   - Verifica interrupção pelo usuário.
+   - Chama loop(t) [VOCÊ SOBRESCREVE ISTO] - Lógica do usuário agrupa comandos.
+   - Bridge.step() - Envia lote CBOR, avança física, recebe sensores atualizados.
+8. Ao sair:
+   - Chama stop() [VOCÊ SOBRESCREVE ISTO].
+   - Encerra simulação e fecha portas de rede.
 ```
 
-## Logging Pattern
+## Padrão de Logging
 
-All modules use the professional logging system:
+Todos os módulos utilizam o sistema de log profissional:
 
 ```python
 from coppelia_sim_framework import setup_logger
 
-logger = setup_logger(__name__, '[APP]')  # or '[MAIN]' for main.py
+logger = setup_logger(__name__, '[APP]')  # ou '[MAIN]' no main.py
 
-logger.info("Starting simulation...")      # [INFO] [APP] [HH:MM:SS] Starting simulation...
-logger.warning("Sensor returned invalid data")  # [WARNING] [APP] [HH:MM:SS] ...
-logger.error("Failed to set motor velocity")    # [ERROR] [APP] [HH:MM:SS] ...
+logger.info("Starting simulation...")      # [INFO] [APP] Starting simulation...
+logger.warning("Sensor LiDAR falhou")      # [WARNING] [APP] ...
+logger.error("Falha ao conectar ZMQ")      # [ERROR] [APP] ...
 ```
 
-## Best Practices Implemented
+## Melhores Práticas Implementadas
 
-1. **Constant Extraction**: All magic numbers are defined as class constants
-2. **Pre-calculation**: Loop-invariant computations are done in `setup()` or `post_start()`
-3. **Validation**: Robust array/sensor data validation before use
-4. **Separation of Concerns**: Real vs. reference trajectories are tracked separately
-5. **Error Handling**: Try-except blocks with informative log messages
-6. **Code Organization**: Methods grouped by responsibility (setup, loop, visualization)
+1. **Eficiência de Rede**: Paradigma de lote (Batch) evita comunicação "chatty" (conversadora) entre os processos.
+2. **Separação de Preocupações**: A `BaseApp` lida com o tempo e os estados; a `SimulationBridge` lida com os bytes da rede.
+3. **Formatos Binários**: Uso do `cbor2` no lugar do JSON para impedir problemas de codificação Unicode ao ler dados volumosos (Nuvens de Pontos/Câmeras).
+4. **Isolamento de Estado**: Os dados reais vs. referências calculadas estão separados.
+5. **Tratamento de Erros**: Blocos Try-except focados e fechamento gracioso (graceful shutdown) nos blocos `finally`.
 
-## Adding a New Example
+## Adicionando um Novo Exemplo
 
-1. Create a new file in `examples/` (e.g., `my_example.py`)
-2. Inherit from `BaseApp`
-3. Implement `setup()`, `loop()`, and `stop()`
-4. Define an `app()` function that instantiates and runs your example
-5. The example will automatically appear in the `main.py` menu
+1. Crie um novo arquivo em `projects/` (ex: `meu_teste.py`).
+2. Herde a classe `BaseApp`.
+3. Implemente `setup()`, `loop(t)` e `stop()`.
+4. Defina uma função `app()` que instancie e rode seu exemplo.
+5. O exemplo estará pronto para ser testado via `main.py`.
 
-Example template:
+Modelo base:
 
 ```python
 from coppelia_sim_framework import BaseApp, setup_logger
 
 logger = setup_logger(__name__, '[APP]')
 
-class MyTest(BaseApp):
+class MeuTeste(BaseApp):
     def __init__(self):
         super().__init__(scene_file="my_scene.ttt", sim_time=30.0)
     
     def setup(self):
-        logger.info("Setting up...")
-        # Get handles, configure sensors
+        logger.info("Configurando robôs e sensores...")
+        # Instancie o Turtlebot, adicione o LDS_02...
     
     def loop(self, t):
-        # Control logic, sensor reading, data logging
+        # Lógica de controle, algoritmos PID, processamento do Lidar
         pass
     
     def stop(self):
-        logger.info("Cleaning up...")
-        # Save results, plot data
+        logger.info("Limpando ambiente...")
+        # Salve resultados, gere gráficos Matplotlib
 
 def app():
-    teste = MyTest()
+    teste = MeuTeste()
     teste.run()
 
 if __name__ == "__main__":
     app()
 ```
 
-## Future Extensions
+## Extensões Futuras
 
-- **More Sensors**: IMU, Ultrasonic, Camera integration
-- **Robot Classes**: Predefined robot models (Pioneer variants, etc.)
-- **GUI**: Real-time visualization during simulation
-- **Advanced Control**: Trajectory tracking, motion planning modules
-- **Distributed Testing**: CI/CD pipeline for regression testing
+- **SLAM e Mapeamento**: Implementar integração direta das Nuvens de Pontos processadas do cache.
+- **Novos Robôs**: Adicionar defnições pré-configuradas de robôs (Omnidirecionais, Braços Industriais).
+- **Controle Avançado**: Módulos de planejamento de trajetória em C-Space nativos.
+- **CI/CD**: Integração em pipelines contínuos para testes automáticos de regressão de simulador.
 
-## References
+## Referências
 
-- [CoppeliaSim Documentation](https://www.coppeliarobotics.com/helpFiles/)
-- [ZMQ Remote API Guide](https://www.coppeliarobotics.com/helpFiles/en/zmqRemoteAPIOverview.htm)
-- [Pioneer P3DX Specifications](http://www.mobilerobots.com/ResearchRobots/PioneerP3DX.aspx)
+- [Documentação do CoppeliaSim](https://www.coppeliarobotics.com/helpFiles/)
+- [ZMQ Remote API e Sincronismo](https://www.coppeliarobotics.com/helpFiles/en/zmqRemoteAPIOverview.htm)
+- [Documentação do Padrão CBOR](https://cbor.io/)
+```
