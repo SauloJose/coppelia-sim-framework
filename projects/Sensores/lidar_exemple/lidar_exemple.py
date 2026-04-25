@@ -126,7 +126,31 @@ class LaserVisualizationExample(BaseApp):
         )
 
         # Initialize sensor (don't read data yet, simulation hasn't started)
-        self.hokuyo_sensor = HokuyoSensorSim(self.bridge, "/PioneerP3DX/fastHokuyo")
+        # Instancia o sensor (usando o nome dinâmico do robô)
+        self.hokuyo_sensor = HokuyoSensorSim(self.bridge, 
+                                             f"/{self.robot.robot_name}/fastHokuyo",True)
+
+        self.robot.add_sensor("LIDAR",self.hokuyo_sensor)
+        
+        # Junta os caminhos de monitoramento do robô e do sensor num só pacote
+        monitor_paths = self.robot.get_monitor_paths()
+        actuator_paths = self.robot.get_actuator_paths()
+        self.bridge.initialize(monitor_paths, actuator_paths, self.sim)
+
+        # TESTE DE DEBUG:
+        print("--- CHAVES NO CACHE DA BRIDGE ---")
+        # Tenta rodar um step manual para forçar a atualização
+        self.bridge.step() 
+        print(self.bridge.latest_state.keys())
+        print("---------------------------------")
+
+        # Pré-calcular índices do sensor (economiza operações no loop)
+        self.sensor_n_points = 684
+        self.idx_frente = self.sensor_n_points // 2
+        self.idx_esq = (3 * self.sensor_n_points) // 4
+        self.idx_dir = self.sensor_n_points // 4
+        self.logger.debug(f"Índices do sensor pré-calculados: frente={self.idx_frente}, esq={self.idx_esq}, dir={self.idx_dir}")
+
 
     def post_start(self):
         """Executed right after simulation starts."""

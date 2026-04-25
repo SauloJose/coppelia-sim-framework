@@ -97,7 +97,7 @@ class HokuyoSensorSim(BaseSensor):
 
         # 2. Processa cada uma das câmeras que formam o Hokuyo
         for vision_sensor in self._vision_sensors:
-            u = self.bridge.get_sensor_data(f"{vision_sensor}_vision")
+            u = self.bridge.get_sensor_data(f"{vision_sensor}_vision_bin")
             sensorM = self.bridge.get_sensor_data(f"{vision_sensor}_matrix")
             
             if u is None or u is False or len(u) < 2 or sensorM is None:
@@ -109,7 +109,8 @@ class HokuyoSensorSim(BaseSensor):
             count_x = int(u[0])
             count_y = int(u[1])
             num_points = count_x * count_y
-            points_data = u[2:]
+            
+            points_data = np.asarray(u[2:])
             
             if len(points_data) < num_points * 4:
                 continue

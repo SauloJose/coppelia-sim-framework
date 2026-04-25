@@ -80,12 +80,22 @@ class ObstacleAvoidanceTester(BaseApp):
 
         # Instancia o sensor (usando o nome dinâmico do robô)
         self.hokuyo_sensor = HokuyoSensorSim(self.bridge, 
-                                             f"/{self.robot.robot_name}/fastHokuyo")
+                                             f"/{self.robot.robot_name}/fastHokuyo",True)
+
+
+        self.robot.add_sensor("LIDAR",self.hokuyo_sensor)
 
         # Junta os caminhos de monitoramento do robô e do sensor num só pacote
-        monitor_paths = self.robot.get_monitor_paths() + self.hokuyo_sensor.get_monitor_paths()
+        monitor_paths = self.robot.get_monitor_paths()
         actuator_paths = self.robot.get_actuator_paths()
-        self.bridge.initialize(monitor_paths, actuator_paths)
+        self.bridge.initialize(monitor_paths, actuator_paths, self.sim)
+
+        # TESTE DE DEBUG:
+        print("--- CHAVES NO CACHE DA BRIDGE ---")
+        # Tenta rodar um step manual para forçar a atualização
+        self.bridge.step() 
+        print(self.bridge.latest_state.keys())
+        print("---------------------------------")
 
         # Pré-calcular índices do sensor (economiza operações no loop)
         self.sensor_n_points = 684
@@ -125,57 +135,58 @@ class ObstacleAvoidanceTester(BaseApp):
             self.logger.error(f"Erro ao capturar dados iniciais do sensor: {e}")
 
     def loop(self, t):
-        """Executado a cada passo da simulação."""
-        # Ler dados do LIDAR UMA VEZ por ciclo de simulação
+        """Executado a cada passo da simulação com lógica de evasão."""
         try:
-            laser_data = np.asarray(self.hokuyo_sensor.update())
-        except Exception as e:
-            self.logger.error(f"Erro ao ler sensor LIDAR: {e}")
-            return
+            # 1. Puxar dados do cache da Bridge (Zero-Lag)
+            # O .update() retorna o que a Bridge capturou no último sim.step()
+            raw_data = self.hokuyo_sensor.update()
+            
+            if raw_data is None:
+                # Se a Bridge ainda não recebeu nada do Coppelia, saímos cedo
+                return
 
-        # Validações de segurança: dados vazios ou formato inválido
-        if laser_data is None or laser_data.size == 0:
-            return
-        
-        if laser_data.ndim == 0:
-            self.logger.error(f"Sensor retornou valor escalar ao invés de array: {laser_data}")
-            return
-        
-        if laser_data.ndim != 2 or laser_data.shape[1] < 2:
-            self.logger.error(f"Formato do sensor inválido: shape={laser_data.shape}, esperado (N, 2)")
-            return
-        
-        # Atualizar índices dinamicamente se o tamanho mudar (raro, mas seguro)
-        n_atual = laser_data.shape[0]
-        if n_atual != self.sensor_n_points:
-            self.sensor_n_points = n_atual
-            self.idx_frente = self.sensor_n_points // 2
-            self.idx_esq = (3 * self.sensor_n_points) // 4
-            self.idx_dir = self.sensor_n_points // 4
-            self.logger.debug(f"Tamanho do sensor alterado para {self.sensor_n_points} pontos")
+            # Converter para Numpy para processamento matemático
+            laser_data = np.asarray(raw_data)
 
-        # Extrair distâncias nas três direções (coluna 1 = distância, coluna 0 = ângulo)
-        dist_frente = laser_data[self.idx_frente, 1]
-        dist_esq = laser_data[self.idx_esq, 1]
-        dist_dir = laser_data[self.idx_dir, 1]
+            # 2. VALIDAÇÃO CRÍTICA (Evita o IndexError)
+            # Verificamos se o array é 2D [pontos, 2] e se tem dados
+            if laser_data.ndim != 2 or laser_data.shape[0] == 0:
+                self.logger.warning(f"LIDAR vazio ou malformado. Shape recebido: {laser_data.shape}")
+                return # Interrompe a execução deste loop específico
 
-        self.logger.debug(f"LIDAR [{t:.2f}s] Esq: {dist_esq:.2f}m | Frente: {dist_frente:.2f}m | Dir: {dist_dir:.2f}m")
+            # 3. Atualizar índices baseados no tamanho real do scan
+            # (Alguns sensores mudam a resolução dinamicamente)
+            n_points = laser_data.shape[0]
+            idx_frente = n_points // 2
+            idx_esq = (3 * n_points) // 4
+            idx_dir = n_points // 4
 
-        # === LÓGICA DE DESVIO DE OBSTÁCULOS ===
-        if dist_frente > self.DIST_SEGURA:
-            # Caminho livre: avança reto
-            v = self.VEL_LINEAR
-            w = 0.0
-        else:
-            # Obstáculo detectado: recua e gira para o lado mais livre
-            v = self.VEL_RECUA
-            w = self.ANGULO_GIRO if dist_esq > dist_dir else -self.ANGULO_GIRO
-        # Aplicar velocidades nos motores
-        try:
+            # 4. Extração de distâncias (Coluna 0: Ângulo, Coluna 1: Distância)
+            dist_frente = laser_data[idx_frente, 1]
+            dist_esq = laser_data[idx_esq, 1]
+            dist_dir = laser_data[idx_dir, 1]
+
+            # Log de depuração para monitorar as leituras no terminal
+            self.logger.debug(f"Distâncias -> Esq: {dist_esq:.2f}m | Frente: {dist_frente:.2f}m | Dir: {dist_dir:.2f}m")
+
+            # 5. LÓGICA DE DECISÃO (Evasão de Obstáculos)
+            if dist_frente > self.DIST_SEGURA:
+                # Caminho livre à frente
+                v = self.VEL_LINEAR
+                w = 0.0
+            else:
+                # Obstáculo detectado: decide para onde girar
+                self.logger.info("Obstáculo detectado! Iniciando manobra...")
+                v = self.VEL_RECUA
+                # Se tiver mais espaço na esquerda, gira para a esquerda, senão direita
+                w = self.ANGULO_GIRO if dist_esq > dist_dir else -self.ANGULO_GIRO
+
+            # 6. ENVIAR COMANDOS (Enfileira no buffer da Bridge)
             self.robot.set_wheel_velocity(linear_vel=v, angular_vel=w)
+
         except Exception as e:
-            self.logger.error(f"Erro ao aplicar velocidades nos motores: {e}")
-    
+            self.logger.error(f"Falha catastrófica no loop de controle: {e}")
+            # Opcional: self.stop_simulation() se o erro for persistente
     def stop(self):
         """Executado após a simulação terminar - parada segura."""
         self.logger.info("Parando motores e finalizando simulação...")

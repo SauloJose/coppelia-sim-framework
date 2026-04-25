@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
 BRAINBYTE - Gerenciador de Infraestrutura de Robótica
-Ponto de entrada principal. Inicia a i
-nterface interativa via CLI.
+Ponto de entrada principal. Inicia a interface interativa via CLI.
 """
 
 # Adiciona o diretório raiz ao sys.path para garantir que os módulos do projeto sejam encontrados
