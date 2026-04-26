@@ -129,8 +129,12 @@ class Manta(BaseBot):
 
     def stop(self) -> None:
         """Para o motor e centraliza a direção."""
-        self.sim.setJointTargetVelocity(self._motor_handle, 0.0)
-        self.sim.setJointTargetPosition(self._steer_handle, 0.0)
+        try: 
+            super().stop()
+            self.sim.setJointTargetVelocity(self._motor_handle, 0.0)
+            self.sim.setJointTargetPosition(self._steer_handle, 0.0)
+        except Exception as e:
+            print(f"[Manta] Erro ao parar motores: {e}")
 
     def __repr__(self) -> str:
         return (

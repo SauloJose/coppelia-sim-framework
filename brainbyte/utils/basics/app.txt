@@ -67,7 +67,7 @@ class {name_app}(BaseApp):
             return super().post_start()
         except Exception as e:
             self.logger.error(f"Error detected in post_start(): {e}")
-    
+
     def loop(self, t):
         """
         Núcleo de execução contínua. 

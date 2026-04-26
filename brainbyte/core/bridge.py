@@ -25,16 +25,17 @@ class SimulationBridge:
         """ Classes como o LDS_02 chamam isso para ler o cache local """
         return self.latest_state.get(path)
 
-    def initialize(self, monitor_paths: list, actuator_paths: list, sim_handle) -> dict:
+    def initialize(self, monitor_paths: list, actuator_paths: list, simulation) -> dict:
         payload = {"type": "INIT", "monitor": monitor_paths, "actuators": actuator_paths}
         
         self.socket.send(cbor2.dumps(payload))
-        if sim_handle:
-            sim_handle.step()
-
-        raw_data = self.socket.recv()
-        return cbor2.loads(raw_data)
-
+        
+        try:
+            raw_data = self.socket.recv()
+            return cbor2.loads(raw_data)
+        except zmq.error.Again:
+            raise ConnectionError("Timeout: O CoppeliaSim não respondeu ao INIT. A simulação está rodando?")
+        
     def step(self):
         payload = self.command_buffer.copy()
         payload["type"] = "STEP"
@@ -72,5 +73,13 @@ class SimulationBridge:
         self.command_buffer[category][path] = value
         
     def close(self):
-        self.socket.close()
-        self.context.term()
+        # Envia um comando de encerramento amigável (opcional, mas bom padrão)
+        try:
+            self.socket.setsockopt(zmq.RCVTIMEO, 100) # Timeout curtinho só pra fechar
+            self.socket.send(cbor2.dumps({"type": "CLOSE"}))
+            self.socket.recv()
+        except:
+            pass
+        finally:
+            self.socket.close()
+            self.context.term()

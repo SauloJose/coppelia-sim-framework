@@ -142,10 +142,13 @@ class BaseApp:
 
         finally:    
             self.logger.info("Stopping simulation in finally...")
-            self.stop()
-            if hasattr(self, 'bridge'):
-                self.bridge.close() # Fecha a nossa porta serial adequadamente
-            self.sim.stopSimulation()
+            try:
+                self.stop()
+                if hasattr(self, 'bridge'):
+                    self.bridge.close() # Fecha a nossa porta serial adequadamente
+                self.sim.stopSimulation()
+            except:
+                return 
     
     # Fetch standard information 
     def d_time(self):

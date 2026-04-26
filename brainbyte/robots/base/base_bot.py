@@ -168,8 +168,16 @@ class BaseBot(ABC):
     @abstractmethod
     def stop(self):
         """
-        Para todos os atuadores conhecidos do robô.
-        Deve ser sobrescrito pela subclasse se houver atuadores.
-        Por padrão, não faz nada.
+        Para todos os controladores associados ao robô.
+        Classes filhas devem sobrescrever este método para parar os motores (atuadores específicos),
+        mas DEVEM chamar super().stop() para garantir a parada dos controles genéricos.
         """
-        pass
+        # Itera sobre todos os controladores registrados
+        for name, control_instance in self._control.items():
+            # Verifica se o controlador possui um método 'stop' e se ele é executável (callable)
+            if hasattr(control_instance, 'stop') and callable(control_instance.stop):
+                try:
+                    control_instance.stop()
+                except Exception as e:
+                    print(f"[BaseBot] Erro ao parar o controlador '{name}': {e}")
+                    

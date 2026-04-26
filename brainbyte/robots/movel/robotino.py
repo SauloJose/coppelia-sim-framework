@@ -158,4 +158,8 @@ class Robotino(BaseBot):
 
     def stop(self):
         """Zera a velocidade de todos os motores, parando o robô."""
-        self.direct_cin(0.0, 0.0, 0.0)
+        super().stop()
+        try:
+            self.direct_cin(0.0, 0.0, 0.0)
+        except Exception as e:
+            print(f"[Robotino] Erro ao parar motores: {e}")

@@ -1,9 +1,12 @@
+import numpy as np
+import traceback
+
 from brainbyte import BaseApp             # A aplicação básica está aqui
 from brainbyte.robots import * # Os robôs configurados estão nessa Pasta 
 from brainbyte.control.automatic import * # Controle automático    
 from brainbyte.control.manual import * # Controle Manual  
 from brainbyte.core.bridge import SimulationBridge
-import numpy as np
+from brainbyte.sensors.LDS_02 import *
 
 """
 @GN0MIO: Este template serve como ponto de partida para a estruturação e desenvolvimento da sua simulação.
@@ -34,25 +37,32 @@ class Controle_de_caminho(BaseApp):
         try:
             self.logger.info("Configuring Robot, Sensor and Controllers...")
 
-            # 1. Instanciar o Robô (Exemplo)
-            # self.robot = Robotino(bridge=self.bridge, robot_name="robotino")
+            # Exemplo de adicionar um robô
+            self.robot = TurtleBot(bridge=self.bridge,
+                               robot_name='Turtlebot3', 
+                               left_motor='left_motor', 
+                               right_motor='right_motor',
+                               base_link='base_link'
+                              )
             
-            #Exemplo de adicionar um sensor 
-            # Instancia o sensor (usando o nome dinâmico do robô)
-            #self.hokuyo_sensor = HokuyoSensorSim(self.bridge, 
-            #                                     f"/{self.robot.robot_name}/fastHokuyo",True)
-            #
-            #
-            #self.robot.add_sensor("LIDAR",self.hokuyo_sensor)
-            # 2. Obter caminhos de monitoramento (sensores/pose) e atuadores (motores)
-            # monitor_paths = self.robot.get_monitor_paths()
-            # actuator_paths = self.robot.get_actuator_paths()
-            
-            # 3. REALIZAR O HANDSHAKE (Obrigatório para o script Lua carregar os handles)
-            # Passamos self.sim para evitar o timeout no modo síncrono
-            # self.bridge.initialize(monitor_paths, actuator_paths, self.sim)
-            
+            self.Lidar = LDS_02(bridge=self.bridge, base_name= 'Turtlebot3')
+
+            self.robot.add_sensor(sensor_name='LIDAR',sensor_instance=self.Lidar)
+
+            # Parte importante no projeto!!!
+            self.handshake()
+
+            #Controlador do robô
+            v_max = .5
+            w_max = np.deg2rad(20)
+
+            self.control = KeyboardController(v_max=v_max, w_max=w_max)
+
             self.dt = self.d_time()
+            self.control._setup_output_filter(0.5, self.dt) #low_pass_filter
+            self.robot.add_control(control_name='KEYBOARD',
+                                   control_instance=self.control)
+            
             self.logger.info("Handshake with CoppeliaSim: OK!")  
 
         except Exception as e:
@@ -61,12 +71,21 @@ class Controle_de_caminho(BaseApp):
     def post_start(self):
         """Executado uma única vez após o startSimulation(). Ideal para leituras iniciais."""
         try:
-            # Exemplo: Capturar posição inicial após a bridge estar populada
-            # pos = self.robot.pose
-            # self.logger.info(f'Initial robot position: x={pos[0]:.2f}, y={pos[1]:.2f}')
             return super().post_start()
         except Exception as e:
             self.logger.error(f"Error detected in post_start(): {e}")
+    
+    def handshake(self):
+        """Necessário para iniciar a lógica de comunicação. Siga esse padrão e adicione
+        cada robô novo no monitor_path e actuator_path"""
+        try: 
+            monitor_paths = self.robot.get_monitor_paths()
+            actuator_paths = self.robot.get_actuator_paths()
+            self.bridge.initialize(monitor_paths, actuator_paths, self.sim)
+            self.logger.info("Handshake with CoppeliaSim: OK!") 
+        except Exception as e:
+            msg = traceback.format_exc()
+            self.logger.error(f"Error in Handshake with CoppeliaSim ({e})! \n Traceback:\n{msg}") 
     
     def loop(self, t):
         """
@@ -75,7 +94,10 @@ class Controle_de_caminho(BaseApp):
         """
         try:
             # Adicione a lógica do loop aqui
-            pass 
+            #Controlador manual
+            v_cmd,w_cmd = self.control.get_command()
+            
+            self.robot.set_wheel_velocity(linear_vel=v_cmd,angular_vel=w_cmd)
         except Exception as e:
             self.logger.error(f"Error detected in loop(): {e}")
 
@@ -83,8 +105,7 @@ class Controle_de_caminho(BaseApp):
         """Rotina de encerramento para garantir a parada segura dos componentes e exportação de resultados."""
         try:
             # Descomente a linha abaixo quando tiver instanciado self.robot no setup()
-            # self.robot.stop()
-            pass
+            self.robot.stop()
         except Exception as e:
             self.logger.error(f"Error detected in stop(): {e}")
 

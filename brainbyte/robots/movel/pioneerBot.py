@@ -150,4 +150,10 @@ class PioneerBot(BaseBot):
     # CONTROLES GERAI
     def stop(self):
         """Para as rodas."""
-        self.set_wheel_velocity(0.0, 0.0)
+        super().stop()
+        try:
+            self.set_wheel_velocity(0.0, 0.0)
+        except Exception as e:
+            print(f"[PionnerBot] Erro ao parar motores: {e}")
+
+    
