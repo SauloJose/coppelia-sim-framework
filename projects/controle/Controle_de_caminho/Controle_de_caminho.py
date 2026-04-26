@@ -20,14 +20,14 @@ import numpy as np
 - stop(): Rotina de encerramento para salvar logs, gráficos ou parar motores.
 """
 
-class {name_app}(BaseApp):
+class Controle_de_caminho(BaseApp):
     """
-    Classe principal da simulação {name_app}.
+    Classe principal da simulação Controle_de_caminho.
     Gerencia o ciclo de vida da aplicação, integrando a lógica de controle com a cena do CoppeliaSim.
     """
     def __init__(self):
         """Inicializa os parâmetros base da aplicação, definindo a cena e o tempo total de simulação."""
-        super().__init__(scene_file="{name_scene}.ttt", sim_name="{name_app}", sim_time={simulation_time})
+        super().__init__(scene_file="Scene.ttt", sim_name="Controle_de_caminho", sim_time=180)
 
     def setup(self):
         """Configura os recursos iniciais da simulação (instanciação de robôs, sensores e controladores)."""
@@ -93,5 +93,5 @@ def app():
     Ponto de entrada principal da simulação. 
     Instancia a classe e inicia o ciclo de vida (run) para integração com o gerenciador BRAINBYTE.
     """
-    aplicacao = {name_app}()
+    aplicacao = Controle_de_caminho()
     aplicacao.run()

@@ -482,11 +482,9 @@ class brainGUI:
             with open(template_app, 'r', encoding='utf-8') as f:
                 conteudo_template = f.read()
 
-            conteudo_final = conteudo_template.format(
-                name_app=nome_aplicacao_limpo,
-                simulation_time=tempo_simulacao,
-                name_scene=nome_cena_limpo
-            )
+            conteudo_final = conteudo_template.replace("{name_app}", nome_aplicacao_limpo)
+            conteudo_final = conteudo_final.replace("{simulation_time}", tempo_simulacao)
+            conteudo_final = conteudo_final.replace("{name_scene}", nome_cena_limpo)
 
             with open(caminho_novo_app, 'w', encoding='utf-8') as f:
                 f.write(conteudo_final)
@@ -532,15 +530,17 @@ class brainGUI:
                 self.logger.warning(f"CoppeliaSim não parece estar aberto para carregar a cena. Erro: {e}")
 
         except Exception as e:
-            self.logger.error(f"Erro ao criar simulação: {e}")
+            msg = traceback.format_exc()
+            self.logger.error(f"Erro ao criar simulação: {msg}")
             self._exibir_texto_com_bot(
                 "Erro Crítico", 
-                f"Não foi possível criar a simulação:\n{e}"
+                f"Não foi possível criar a simulação:\n{e}\nTraceback:\n{msg}"
             )
         finally:
             # Esconde o cursor de volta pro menu continuar limpo
             sys.stdout.write('\033[?25l')
             sys.stdout.flush()
+
     # ---------- Funcionalidade para navegar no projeto ---------
     def _navegate_project(self):
         """
