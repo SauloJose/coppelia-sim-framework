@@ -130,8 +130,6 @@ dmypy.json
 *~
 .DS_Store
 
-# CoppeliaSim specific
-*.ttt
 
 # Project specific
 laser_plot_*.png
