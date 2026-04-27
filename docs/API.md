@@ -1,328 +1,128 @@
-# API Reference
 
-## Core Module
+# Brainbyte API Reference
 
-### BaseApp
-
-Base class for all CoppeliaSim simulations.
-
-```python
-class BaseApp:
-    def __init__(self, scene_file: str = None, sim_time: float = 10.0)
-```
-
-**Parameters:**
-- `scene_file` (str, optional): Path to .ttt scene file relative to `scenes/` folder
-- `sim_time` (float): Maximum simulation time in seconds. Default is 10.0 seconds
-
-**Methods:**
-
-#### run()
-```python
-def run(self) -> None
-```
-Main execution method. Orchestrates the complete simulation lifecycle.
-
-#### setup()
-```python
-def setup(self) -> None
-```
-Override this method to configure resources before simulation starts.
-- Get object handles
-- Initialize sensors
-- Set initial parameters
-
-#### post_start()
-```python
-def post_start(self) -> None
-```
-Override this method to execute code immediately after simulation starts (first post-step).
-- Capture initial sensor readings
-- Log initial robot pose
-
-#### loop(t)
-```python
-def loop(self, t: float) -> None
-```
-Override this method to run control logic at each simulation step.
-
-**Parameters:**
-- `t` (float): Current simulation time in seconds
-
-#### stop()
-```python
-def stop(self) -> None
-```
-Override this method to execute cleanup code after simulation ends.
-- Save trajectory data
-- Plot results
-- Stop motors
+This document provides a technical reference for the core classes, methods, and utilities available in the Brainbyte framework.
 
 ---
 
-## Logging Module
+## 1. Core Module (`brainbyte.core`)
 
-### ProfessionalFormatter
+### BaseApp
+**Path:** `brainbyte.core.base_app.BaseApp`
 
-Custom logging formatter for professional output.
+The abstract base class that manages the simulation lifecycle and network communication. All simulation projects must inherit from this class.
 
 ```python
-class ProfessionalFormatter(logging.Formatter):
-    def __init__(self, origin_prefix: str = '[APP]')
+def __init__(self, scene_file: str = None, sim_time: float = 10.0)
+```
+* **`scene_file`** (`str`, optional): Path to the `.ttt` scene file. Usually placed alongside the simulation script.
+* **`sim_time`** (`float`): Maximum simulation duration in seconds.
+
+#### Lifecycle Methods (To be overridden)
+
+* **`setup(self) -> None`**
+    Called once before the simulation starts. Use this to establish simulation handles, define variables, and instantiate controllers or robot objects.
+* **`post_start(self) -> None`**
+    Called exactly once immediately after the first simulation step. Ideal for capturing initial ground-truth poses or initializing algorithms that require the physics engine to be active.
+* **`loop(self, t: float) -> None`**
+    Called continuously at each simulation step. Contains the main control loop.
+    * **`t`**: Current simulation time in seconds.
+* **`stop(self) -> None`**
+    Called after the simulation terminates. Use this to safely stop robot motors, process final data arrays, and generate plots.
+
+#### Internal Execution
+* **`run(self) -> None`**
+    Triggers the framework's internal event loop. Should only be called within the `app()` entry point.
+
+---
+
+### SimulationBridge
+**Path:** `brainbyte.core.bridge.SimulationBridge`
+
+Handles the ZeroMQ/CBOR data batching. Accessed internally via `self.bridge` inside your `BaseApp` instance.
+
+#### Queuing Methods (Batch Dataflow)
+* **`queue_velocity(self, path: str, velocity: float) -> None`**
+    Schedules a velocity target for a specific joint.
+* **`queue_position(self, path: str, position: float) -> None`**
+    Schedules a position target for a specific joint or servo.
+* **`queue_command(self, category: str, path: str, value: any) -> None`**
+    Schedules a custom command (e.g., teleportation, custom Lua function triggers).
+
+#### Data Retrieval
+* **`get_sensor_data(self, path: str) -> any`**
+    Retrieves the latest cached data for a specific path from the current frame without triggering network I/O. Returns deserialized CBOR data (e.g., native `numpy` arrays for LiDAR).
+
+---
+
+## 2. Robots & Controllers (`brainbyte.robots`)
+
+### Control Interfaces
+**Path:** `brainbyte.robots.base`
+
+* **`AutoController`**: Base class for implementing autonomous behaviors, path planning (e.g., A*, RRT), and trajectory following algorithms.
+* **`ManualController`**: Base class mapping keyboard/joystick inputs to robot velocity queues.
+
+### Pre-built Robot Models
+**Path:** `brainbyte.robots.movel`
+
+Standardized classes wrapping differential, omnidirectional, or ackermann kinematics.
+
+```python
+from brainbyte.robots.movel.turtlebot import TurtleBot
+
+# Typical usage within BaseApp.setup()
+self.robot = TurtleBot(base_path='/TurtleBot', bridge=self.bridge)
 ```
 
-**Parameters:**
-- `origin_prefix` (str): Logging origin indicator, e.g., '[MAIN]' or '[APP]'
+---
 
-**Output Format:**
+## 3. Utilities (`brainbyte.utils`)
+
+### Plotting
+**Path:** `brainbyte.utils.plotting`
+
+Provides standardized Matplotlib wrappers configured for robotics visualization.
+
+```python
+def Plot2D(data, x_label: str, y_label: str, tamanho_janela=(8, 6), limite_x=None, limite_y=None, title=None) -> None
 ```
-[LEVEL] [ORIGIN] [HH:MM:SS] message
+* **`data`**: `array_like` of shape `(N, 2)` representing [x, y] coordinates.
+* **Visuals**: Automatically adds a green circle at `data[0]` (start) and a red star at `data[-1]` (end).
+
+```python
+def Plot3D(data, x_label: str, y_label: str, z_label: str, tamanho_janela=(8, 6), limite_x=None, limite_y=None, limite_z=None, title=None) -> None
 ```
+* **`data`**: `array_like` of shape `(N, 3)` representing [x, y, z] coordinates.
 
-### setup_logger()
+### Math Operations
+**Path:** `brainbyte.utils.math`
 
-Factory function to create configured loggers.
+* **`normalize_angle(angle: float) -> float`**: Normalizes an angle to the $[-\pi, \pi]$ range.
+* **`euler_to_quaternion(roll, pitch, yaw) -> list`**: Converts Euler angles to quaternion representation.
+
+---
+
+## 4. Logging (`brainbyte.core.logging`)
+
+### setup_logger
+**Path:** `brainbyte.core.logging.setup_logger`
+
+Instantiates a strictly formatted logger that outputs to both the console and `brainbyte/logs/`.
 
 ```python
 def setup_logger(name: str, origin_prefix: str = '[APP]') -> logging.Logger
 ```
+* **`name`**: Typically `__name__` of the calling module.
+* **`origin_prefix`**: Sub-system identifier (e.g., `[BRIDGE]`, `[CLI]`, `[ROBOT]`).
 
-**Parameters:**
-- `name` (str): Logger name, typically `__name__`
-- `origin_prefix` (str): Origin indicator prefix
-
-**Returns:**
-- `logging.Logger`: Configured logger instance
-
-**Example:**
+**Usage:**
 ```python
-from coppelia_sim_framework import setup_logger
-
-logger = setup_logger(__name__, '[APP]')
-logger.info("Application started")  # [INFO] [APP] [14:32:45] Application started
-```
-
----
-
-## Utils Module
-
-### Plot2D()
-
-Plot 2D robot trajectory with marked start and end points.
-
-```python
-def Plot2D(
-    data: array_like,
-    x_label: str,
-    y_label: str,
-    tamanho_janela: tuple = (8, 6),
-    limite_x: tuple = None,
-    limite_y: tuple = None,
-    title: str = None
-) -> None
-```
-
-**Parameters:**
-- `data` (array_like): 2D array of shape (N, 2) with [x, y] coordinates
-- `x_label` (str): Label for X-axis
-- `y_label` (str): Label for Y-axis
-- `tamanho_janela` (tuple): Figure size in inches (width, height). Default: (8, 6)
-- `limite_x` (tuple, optional): X-axis limits (min, max)
-- `limite_y` (tuple, optional): Y-axis limits (min, max)
-- `title` (str, optional): Plot title. Default: "{y_label} vs {x_label}"
-
-**Features:**
-- Green circle: trajectory start point
-- Red star: trajectory end point
-- Blue line: trajectory path
-- Grid and equal aspect ratio enabled
-
-**Example:**
-```python
-from coppelia_sim_framework import Plot2D
-import numpy as np
-
-trajectory = np.array([[0, 0], [1, 1], [2, 0.5]])
-Plot2D(trajectory, 'Position X (m)', 'Position Y (m)', title='Robot Path')
-```
-
-### Plot3D()
-
-Plot 3D robot trajectory with marked start and end points.
-
-```python
-def Plot3D(
-    data: array_like,
-    x_label: str,
-    y_label: str,
-    z_label: str,
-    tamanho_janela: tuple = (8, 6),
-    limite_x: tuple = None,
-    limite_y: tuple = None,
-    limite_z: tuple = None,
-    title: str = None
-) -> None
-```
-
-**Parameters:**
-- `data` (array_like): 2D array of shape (N, 3) with [x, y, z] coordinates
-- `x_label`, `y_label`, `z_label` (str): Axis labels
-- `tamanho_janela` (tuple): Figure size. Default: (8, 6)
-- `limite_x`, `limite_y`, `limite_z` (tuple, optional): Axis limits
-- `title` (str, optional): Plot title
-
-**Features:**
-- 3D visualization of trajectory
-- Same marking conventions as Plot2D
-- Full 3D rotation and zoom support
-
-**Example:**
-```python
-from coppelia_sim_framework import Plot3D
-import numpy as np
-
-trajectory_3d = np.array([
-    [0, 0, 0],
-    [1, 1, 0.5],
-    [2, 0.5, 1.0]
-])
-Plot3D(trajectory_3d, 'X (m)', 'Y (m)', 'Z (m)', title='3D Robot Motion')
-```
-
----
-
-## Common Patterns
-
-### Creating a Simulation
-
-```python
-from coppelia_sim_framework import BaseApp, setup_logger
-
+from brainbyte.core.logging import setup_logger
 logger = setup_logger(__name__, '[APP]')
 
-class MySimulation(BaseApp):
-    def __init__(self):
-        super().__init__(scene_file="my_scene.ttt", sim_time=30.0)
-        
-    def setup(self):
-        logger.info("Configuring simulation...")
-        self.robotHandle = self.sim.getObject('/MyRobot')
-        
-    def loop(self, t):
-        position = self.sim.getObjectPosition(self.robotHandle, -1)
-        logger.debug(f"Position at t={t}: {position}")
-        
-    def stop(self):
-        logger.info("Simulation ended")
-
-def app():
-    sim = MySimulation()
-    sim.run()
-
-if __name__ == "__main__":
-    app()
+logger.debug("Debugging values.")
+logger.info("Standard execution info.")
+logger.warning("Non-critical issue detected.")
+logger.error("Critical failure.")
 ```
-
-### Handling Sensor Data
-
-```python
-import numpy as np
-
-def loop(self, t):
-    try:
-        # Read sensor data
-        raw_data = self.sensor.getData()
-        data = np.asarray(raw_data)
-        
-        # Validate
-        if data is None or data.size == 0:
-            logger.warning("Empty sensor data")
-            return
-        
-        if data.ndim == 0:
-            logger.error(f"Scalar instead of array: {data}")
-            return
-        
-        # Use data
-        distance = data[0, 1]
-        logger.debug(f"Distance: {distance:.2f}m")
-        
-    except Exception as e:
-        logger.error(f"Sensor read error: {e}")
-```
-
-### Kinematics for Differential Robots
-
-```python
-# Convert linear (v) and angular (w) velocities to wheel velocities
-v = 0.5        # m/s
-w = 0.2        # rad/s
-L = 0.381      # distance between wheels (m)
-r = 0.0975     # wheel radius (m)
-
-wl = (v / r) - (w * L) / (2 * r)  # left wheel
-wr = (v / r) + (w * L) / (2 * r)  # right wheel
-
-self.sim.setJointTargetVelocity(self.l_wheel, wl)
-self.sim.setJointTargetVelocity(self.r_wheel, wr)
-```
-
----
-
-## Error Handling
-
-### Common Exceptions
-
-**RemoteAPIClient connection errors:**
-```python
-try:
-    client = RemoteAPIClient()
-except Exception as e:
-    logger.error(f"Connection failed: {e}")
-    sys.exit(1)
-```
-
-**Invalid handles:**
-```python
-handle = self.sim.getObject('/NonExistentObject')
-if handle == -1:
-    logger.error("Object not found in scene")
-    raise RuntimeError("Missing object")
-```
-
-**Scene loading errors:**
-```python
-try:
-    self.sim.loadScene(scene_path)
-except Exception as e:
-    logger.error(f"Failed to load scene: {e}")
-    raise
-```
-
----
-
-## Version History
-
-**v1.1.68** (Current)
-
-- Rewritten communication core: implemented SimulationBridge with ZeroMQ and CBOR, eliminating the bottleneck of the classic RemoteAPIClient.
-
-- The stepping engine (step) now delegates responsibility to the Threaded Lua script on the Coppelia side.
-
-- Added TurtleBot robot models.
-
-- Added control classes: AutoController and ManualController.
-
-- Integrated the updated Command Line Interface (CLI).
-
-**v1.1.2** 
-- Added `post_start()` lifecycle method
-- Improved sensor data validation patterns
-- Enhanced documentation
-
-**v1.0.0**
-- Initial framework release
-- Core BaseApp class
-- Professional logging system
-- Plot2D/Plot3D visualization
-

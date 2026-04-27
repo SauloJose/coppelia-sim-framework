@@ -1,4 +1,4 @@
-# CoppeliaSim Framework - Professional Robot Simulation
+# Brainbyte - Professional Robot Simulation Framework
 
 A comprehensive Python framework for controlling and testing robot simulations in CoppeliaSim using the RemoteAPI ZMQ interface.
 
@@ -14,30 +14,52 @@ A comprehensive Python framework for controlling and testing robot simulations i
 ## Project Structure
 
 ```text
-coppelia_sim_framework/          # Main package
+brainbyte/                       # Main package
+├── logs/                        # Log files directory
+│   ├── main.log                 # GUI interface logs
+│   └── simulation.log           # Simulation execution logs
 ├── core/
-│   ├── base_app.py             # BaseApp - simulation lifecycle management
-│   └── logging.py              # Professional logging system
+│   ├── base_app.py              # BaseApp - simulation lifecycle management
+│   ├── bridge.py                # ZMQ communication bridge
+│   └── logging.py               # Core logging setup
 ├── utils/
-│   └── plotting.py             # Plot2D() and Plot3D() visualization
-├── sensors/                    # Sensor implementations (extensible)
-├── robots/                     # Robot models (extensible)
-└── gui/                        # GUI components (future)
+│   ├── basics/                  # Templates and base files
+│   │   ├── app.txt              # Application template
+│   │   └── sim.ttt              # Basic simulation scene
+│   ├── logging.py               # Utility logging functions
+│   ├── plotting.py              # Plot2D() and Plot3D() visualization
+│   └── math.py                  # Mathematical calculations and utilities
+├── robots/                      # Robot models and classes
+│   ├── base/
+│   │   └── base_robot.py        # Parent class for all robot models
+│   ├── arms/                    # Robotic arm implementations
+│   ├── humanoid/                # Humanoid robot implementations
+│   ├── models/                  # .ttt models to import into CoppeliaSim
+│   └── movel/                   # Mobile robots (Pioneer, TurtleBot, Manta, Robotino, etc.)
+├── gui/
+│   ├── auxF.py                  # Auxiliary functions for the GUI
+│   └── cli.py                   # Beautiful CLI-based GUI implementation
+└── sensors/                     # Sensor implementations (extensible)
 
-examples/                        # Example applications
-├── locomotion_example.py       # Lissajous trajectory following
-└── obstacle_avoidance_example.py  # LIDAR obstacle avoidance
+projects/                        # Project storage organized by topics
+├── locomotion/                  # Topic category
+│   └── my_locomotion_project/   # Specific project folder
+│       ├── my_locomotion_project.py # Main script (matches folder name)
+│       └── scene.ttt            # CoppeliaSim scene file for this project
+└── obstacle_avoidance/          # Topic category
+    └── lidar_avoidance/         # Specific project folder
+        ├── lidar_avoidance.py   
+        └── lidar_avoidance.ttt  
 
-tests/                          # Unit tests
-docs/                           # Documentation
-config/                         # Configuration files
-scripts/                        # Utility scripts
+tests/                           # Unit tests
+docs/                            # Documentation
+config/                          # Configuration files
 
-main.py                         # Interactive menu launcher
-setup.py                        # Package installation
-pyproject.toml                  # Project metadata
-requirements-dev.txt            # Development dependencies
-.gitignore                      # Git ignore rules
+main.py                          # Interactive menu launcher
+setup.py                         # Package installation
+pyproject.toml                   # Project metadata
+requirements-dev.txt             # Development dependencies
+.gitignore                       # Git ignore rules
 ```
 
 ## Installation
@@ -63,29 +85,33 @@ pip install -r requirements.txt
 
 ## Quick Start
 
-### Running an Example
+### Running a Project
 
 ```bash
 python main.py
 ```
 
-Select from the interactive menu to run available examples. 
+Select from the interactive CLI menu to run available projects. 
 * **Graceful Stop:** Press 's' during execution to stop the simulation.
 * **Emergency Stop:** Press Ctrl+C.
 
 ### Creating a New Simulation
 
-1. **Create a new file** in `examples/` (e.g., `my_robot_example.py`)
-2. **Inherit from BaseApp**:
+1. **Create a new project folder and files** inside a topic category in `projects/` (e.g., `projects/locomotion/my_robot/`). The Python script must match the folder's name, and the scene file should be placed alongside it:
+   * `projects/locomotion/my_robot/my_robot.py`
+   * `projects/locomotion/my_robot/my_robot.ttt`
+2. **Inherit from BaseApp** inside your `.py` file:
 
 ```python
-from coppelia_sim_framework import BaseApp, setup_logger
+from brainbyte.core.base_app import BaseApp
+from brainbyte.core.logging import setup_logger
 
 logger = setup_logger(__name__, '[APP]')
 
 class MyRobotSimulation(BaseApp):
     def __init__(self):
-        super().__init__(scene_file="my_scene.ttt", sim_time=30.0)
+        # Point to the .ttt file in the same directory
+        super().__init__(scene_file="my_robot.ttt", sim_time=30.0)
     
     def setup(self):
         """Called once before simulation starts."""
@@ -119,6 +145,15 @@ if __name__ == "__main__":
 
 ## Core Components
 
+### Communication Bridge Architecture
+
+To ensure fast, reliable, and concise data exchange between Python and the simulator, the framework utilizes a highly optimized ZeroMQ (ZMQ) bridge architecture located in `core/bridge.py`:
+
+- **CoppeliaSim Thread Script:** Inside the CoppeliaSim environment, a dedicated threaded script actively listens for incoming requests.
+- **Variable Caching:** When initialized, this script receives a list of parameters and saves in cache exactly which variables and sensors it needs to monitor.
+- **CBOR2 Serialization:** Data is packaged and transmitted using the binary `cbor2` format, which is drastically lighter and faster to process than standard JSON.
+- **Path-based Keying:** When the simulator replies, the payload uses the actual simulation "path" of the variable (e.g., `/MyRobot/Lidar`) as the dictionary key. This allows the Python logic to instantly map incoming binary data to the correct virtual components without heavy parsing overhead.
+
 ### Simulation Lifecycle
 
 The framework implements a standardized lifecycle for all simulations:
@@ -149,15 +184,15 @@ Manages the complete simulation orchestration:
 
 ### Professional Logging
 
-All modules use a standardized, emoji-free logging system for traceability:
+All modules use a standardized, emoji-free logging system for traceability. Logs are automatically saved in the `brainbyte/logs/` directory.
 
 ```python
-from coppelia_sim_framework import setup_logger
+from brainbyte.core.logging import setup_logger
 
 logger = setup_logger(__name__, '[APP]')
 
-logger.info("Starting...")    # [INFO] [APP] [14:32:45] Starting...
-logger.error("Failed...")     # [ERROR] [APP] [14:32:47] Failed...
+logger.info("Starting...")    # [INFO] [APP] Starting...
+logger.error("Failed...")     # [ERROR] [APP] Failed...
 ```
 
 **Format**: `[LEVEL] [ORIGIN] [HH:MM:SS] message`
@@ -165,7 +200,7 @@ logger.error("Failed...")     # [ERROR] [APP] [14:32:47] Failed...
 ### Visualization Functions
 
 ```python
-from coppelia_sim_framework import Plot2D, Plot3D
+from brainbyte.utils.plotting import Plot2D, Plot3D
 import numpy as np
 
 # 2D trajectory plot
@@ -194,13 +229,6 @@ Run initial tests or capture initial poses using `post_start()` instead of using
 ### 4. Separate Real vs. Reference Trajectories
 Keep isolated lists for simulated coordinates and reference/desired coordinates to make plotting and error calculation easier.
 
-## Examples
-
-1. **Lissajous Trajectory Following (`locomotion_example.py`)**
-   - Trajectory generation, differential kinematics, velocity control, and visualization.
-2. **Obstacle Avoidance (`obstacle_avoidance_example.py`)**
-   - LIDAR sensor integration, deviation logic, and real-time decision making.
-
 ## Running Tests
 
 ```bash
@@ -208,7 +236,7 @@ Keep isolated lists for simulated coordinates and reference/desired coordinates 
 pytest
 
 # Run with coverage
-pytest --cov=coppelia_sim_framework
+pytest --cov=brainbyte
 ```
 
 ## Troubleshooting
@@ -220,9 +248,19 @@ pytest --cov=coppelia_sim_framework
 
 ## Version History
 
-**v1.1.0** (Current)
-- Professional folder structure for distribution and packaging (`setup.py`, `pyproject.toml`).
-- Completely revamped logging system (standardized, traceable, no emojis).
+**v1.1.60** (Current)
+- Main package renamed to `brainbyte`.
+- Reorganized module structure: `core`, `utils`, `robots`, `gui`.
+- Moved logging directory to root (`brainbyte/logs/main.log` and `simulation.log`).
+- Grouped robot modules logically (`arms`, `base`, `humanoid`, `models`, `movel`).
+- Re-architected `projects/` directory into a Topic > Project > Files hierarchy. Main scripts must now match their parent project folder name.
+- Added beautiful CLI implementation in `gui/cli.py` with auxiliary functions in `auxF.py`.
+- Removed deprecated `scripts/` directory.
+- Included base template files inside `utils/basics/`.
+
+**v1.1.0**
+- Professional folder structure for distribution and packaging.
+- Completely revamped logging system.
 - Added `post_start()` lifecycle method.
 - Comprehensive documentation and unit test framework.
 
@@ -245,4 +283,3 @@ See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for details.
 - **License:** MIT License - see LICENSE file for details.
 - **Documentation:** Check the [docs/](docs/) folder.
 - **Support:** Report issues on GitHub or ask questions in discussions.
-```

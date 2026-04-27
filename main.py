@@ -44,7 +44,7 @@ def verify_and_install_dependencies():
         print("\n[INFO] Dependências novas ou desatualizadas detectadas. Instalando pacotes...")
         try:
             # Chama o pip internamente usando o executável atual do Python
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", str(REQUIREMENTS_FILE)])
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", str(REQUIREMENTS_FILE)]) #ISSO AQUI É INTERESSANTE DMS!
             print("[INFO] Instalação concluída com sucesso!\n")
             
             # Atualiza o config.json com as dependências que acabaram de ser instaladas
@@ -63,7 +63,7 @@ def verify_and_install_dependencies():
 # Garantimos que tudo está instalado!
 verify_and_install_dependencies()
 
-# Adiciona o diretório ao path
+# Adiciona o diretório ao path #Retorno ao diretório correto da implementação, para retornar ao código.
 sys.path.insert(0, str(BASE_DIR))
 
 # Agora sim fazemos os imports do projeto com segurança

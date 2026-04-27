@@ -93,29 +93,31 @@ class BaseApp:
                 if not os.path.exists(scene_path):
                     raise FileNotFoundError(f"Scene not found: {scene_path}")
                 self.logger.info(f"Loading scene: {self.scene_file}...")
-                self.sim.loadScene(scene_path)
+                self.sim.loadScene(scene_path) # load the Scene in the Coppelia
             
 
             self.logger.info("Starting simulation...")
-            self.sim.startSimulation()
-
+            self.sim.startSimulation() #Initialize the simulation
+ 
             time.sleep(0.5)
             
             for _ in range(3):
                 self.sim.step()           # make te Coppelia advance one step, callin the system_sensing()
                 time.sleep(0.05)
             
+            # NECESSARY: Make the bridge to communicate with the Coppelia via ZeroMQ using cbor2
             self.bridge = SimulationBridge()
+
+            # NECESSARY: Setup my simulation
             self.setup()
-
-
             
+            # NECESSARY: post_start logic to init my configurations
             self.post_start()
             
             current_state = self.bridge.step()
             t = current_state.get('sim_time', 0.0)
 
-            # Main loop
+            # Main loop of the simulation. Here we can add the logic from loop and the communication with the bridge.
             while t  < self.sim_time:
                 try:
                     if keyboard.is_pressed('x'):
@@ -125,8 +127,11 @@ class BaseApp:
                     # Catch errors if the user lacks the module or root privileges
                     self.logger.error("Error detected on Keyboard input (request sudo in Linux/Mac). Press Ctrl+C to stop.")
                 
+                # IMPORTANT: Here is the logic of my simulation! The child-class have to make this.
                 self.loop(t)
 
+                # IMPORTANT: Here is a very useful thing. Using self.bridge.step() we call the ZeroMQ API to communicate the 
+                # state of the simulation, so, this is VERY IMPORTANT AND NECESSARY to mantain here!
                 self.bridge.step()
 
                 # att the time
