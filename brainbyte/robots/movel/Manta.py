@@ -131,8 +131,7 @@ class Manta(BaseBot):
         """Para o motor e centraliza a direção."""
         try: 
             super().stop()
-            self.sim.setJointTargetVelocity(self._motor_handle, 0.0)
-            self.sim.setJointTargetPosition(self._steer_handle, 0.0)
+            self.set_velocity(0,0)
         except Exception as e:
             print(f"[Manta] Erro ao parar motores: {e}")
 

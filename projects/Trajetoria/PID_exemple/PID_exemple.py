@@ -40,9 +40,9 @@ class PIDSimu(BaseApp):
         # Definindo o PID 
         self.PID = PID_Controller(var=1,
                                   kp=4,
-                                  kd=3,
-                                  ki=0.1,
-                                  set_point=0,
+                                  kd=2,
+                                  ki=0.2,
+                                  set_point=-1,
                                   dt=self.dt)
         
         self.robot.add_control(control_name="PID",
@@ -67,7 +67,7 @@ class PIDSimu(BaseApp):
 
             u = self.robot.get_control("PID").run(y_atual)
 
-            self.robot.set_velocity(velocity=30, steer = u)
+            self.robot.set_velocity(velocity=10, steer = u)
         except Exception as e:
             self.logger.error(f"Erro: {e}")
 
