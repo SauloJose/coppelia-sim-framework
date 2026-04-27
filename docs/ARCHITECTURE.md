@@ -1,58 +1,7 @@
+
 # Brainbyte Architecture & System Design
 
 This document outlines the architectural decisions, communication protocols, and system design principles underlying the Brainbyte framework. It is intended for developers who want to understand *how* the framework operates under the hood.
-
----
-## Project Structure
-
-```text
-brainbyte/                       # Main package
-├── logs/                        # Log files directory
-│   ├── main.log                 # GUI interface logs
-│   └── simulation.log           # Simulation execution logs
-├── core/
-│   ├── base_app.py              # BaseApp - simulation lifecycle management
-│   ├── bridge.py                # ZMQ communication bridge
-│   └── logging.py               # Core logging setup
-├── utils/
-│   ├── basics/                  # Templates and base files
-│   │   ├── app.txt              # Application template
-│   │   └── sim.ttt              # Basic simulation scene
-│   ├── logging.py               # Utility logging functions
-│   ├── plotting.py              # Plot2D() and Plot3D() visualization
-│   └── math.py                  # Mathematical calculations and utilities
-├── robots/                      # Robot models and classes
-│   ├── base/
-│   │   └── base_robot.py        # Parent class for all robot models
-│   ├── arms/                    # Robotic arm implementations
-│   ├── humanoid/                # Humanoid robot implementations
-│   ├── models/                  # .ttt models to import into CoppeliaSim
-│   └── movel/                   # Mobile robots (Pioneer, TurtleBot, Manta, Robotino, etc.)
-├── gui/
-│   ├── auxF.py                  # Auxiliary functions for the GUI
-│   └── cli.py                   # Beautiful CLI-based GUI implementation
-└── sensors/                     # Sensor implementations (extensible)
-
-projects/                        # Project storage organized by topics
-├── locomotion/                  # Topic category
-│   └── my_locomotion_project/   # Specific project folder
-│       ├── my_locomotion_project.py # Main script (matches folder name)
-│       └── scene.ttt            # CoppeliaSim scene file for this project
-└── obstacle_avoidance/          # Topic category
-    └── lidar_avoidance/         # Specific project folder
-        ├── lidar_avoidance.py   
-        └── lidar_avoidance.ttt  
-
-tests/                           # Unit tests
-docs/                            # Documentation
-config/                          # Configuration files
-
-main.py                          # Interactive menu launcher
-setup.py                         # Package installation
-pyproject.toml                   # Project metadata
-requirements-dev.txt             # Development dependencies
-.gitignore                       # Git ignore rules
-```
 
 ---
 
@@ -87,12 +36,13 @@ Instead of immediate execution, Brainbyte uses a deferred execution model.
 1. **Queueing Phase:** During the `BaseApp.loop(t)` execution, calls to `self.bridge.queue_velocity()` do *not* touch the network. They simply append data to an internal Python dictionary (the "Batch").
 2. **Step Phase:** Once the loop iteration ends, the `SimulationBridge` packs the entire Batch into a single CBOR payload and fires it over ZMQ.
 3. **Cache Update:** The reply from CoppeliaSim contains a flat dictionary of all sensor states. This dictionary overwrites the local `latest_state` cache.
-4. **Read Phase:** In the next loop iteration, when a robot class requests sensor data via `get_sensor_data()`, it simply reads from the local Python cache (an $O(1)$ lookup with zero network overhead).
+4. **Read Phase:** In the next loop iteration, when a robot class requests sensor data via `get_sensor_data()`, it simply reads from the local Python cache (an O(1) lookup with zero network overhead).
 
 ### 2.1 Payload Anatomy
 
-** INIT Payload (Handshake - Python -> CoppeliaSim):**
+The communication relies on specific dictionary structures encoded in CBOR. Here is how they look conceptually:
 
+**1. INIT Payload (Handshake - Python -> CoppeliaSim):**
 Sent exactly once before the simulation starts. It provides the Lua script with a list of all object paths that Python intends to monitor or control. The Lua engine finds their integer handles and caches them internally, avoiding slow string lookups during the main loop.
 ```json
 {
@@ -106,7 +56,8 @@ Sent exactly once before the simulation starts. It provides the Lua script with 
 }
 ```
 
-**Outgoing Payload (Python $\rightarrow$ CoppeliaSim):**
+**2. Outgoing STEP Payload (Python -> CoppeliaSim):**
+Sent every frame. Contains the batched commands accumulated during the Python loop.
 ```json
 {
     "type": "STEP",
@@ -120,8 +71,8 @@ Sent exactly once before the simulation starts. It provides the Lua script with 
 }
 ```
 
-**Incoming Payload (CoppeliaSim $\rightarrow$ Python):**
-Notice that paths are used as literal dictionary keys. This eliminates the need to search for objects in complex trees.
+**3. Incoming STEP Payload (CoppeliaSim -> Python):**
+Received every frame. Notice that paths are used as literal dictionary keys. This flat structure allows Python to update its cache instantly.
 ```json
 {
     "/TurtleBot/GPS": [1.2, 0.5, 0.0],
@@ -147,8 +98,7 @@ The `BaseApp` class is a State Machine that guarantees safe startup and teardown
       ▼
 2. SETUP PHASE
       ├─ Execute user-defined `setup()` (get handles, declare variables).
-      └─ Send 'INIT' Payload: Python sends a list of all required paths.
-         CoppeliaSim caches these handles internally to avoid string lookups during loops.
+      └─ Bridge sends 'INIT' Payload. CoppeliaSim caches the handles.
       │
       ▼
 3. SIMULATION START
@@ -161,7 +111,7 @@ The `BaseApp` class is a State Machine that guarantees safe startup and teardown
       │  ┌───────────────────────────────────────────────┐
       │  │ a. Check for user interrupts (Ctrl+C / 's').  │
       ├──┼─┤ b. Execute user-defined `loop(t)`.          │
-      │  │ c. Bridge sends queued commands via CBOR.     │
+      │  │ c. Bridge sends queued commands (STEP).       │
       │  │ d. CoppeliaSim steps physics and replies.     │
       │  └───────────────────────────────────────────────┘
       │    (Loops while t < sim_time and no interrupt)
