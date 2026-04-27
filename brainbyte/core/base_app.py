@@ -101,10 +101,8 @@ class BaseApp:
 
             time.sleep(0.5)
             
-            # Dentro de BaseApp.run(), depois de self.sim.startSimulation() e time.sleep(0.5)
-            self.logger.info("Acordando o servidor Lua com um passo vazio...")
             for _ in range(3):
-                self.sim.step()           # faz o Lua executar sysCall_sensing()
+                self.sim.step()           # make te Coppelia advance one step, callin the system_sensing()
                 time.sleep(0.05)
             
             self.bridge = SimulationBridge()
@@ -131,7 +129,7 @@ class BaseApp:
 
                 self.bridge.step()
 
-                # Atualizamos o relógio com o tempo novo que veio do Lua
+                # att the time
                 t = current_state.get('sim_time', t + 0.05)
 
         except KeyboardInterrupt:
@@ -145,7 +143,7 @@ class BaseApp:
             try:
                 self.stop()
                 if hasattr(self, 'bridge'):
-                    self.bridge.close() # Fecha a nossa porta serial adequadamente
+                    self.bridge.close() # stop de bridge connection
                 self.sim.stopSimulation()
             except:
                 return 

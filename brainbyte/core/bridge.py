@@ -9,12 +9,11 @@ class SimulationBridge:
         self.socket.setsockopt(zmq.RCVTIMEO, timeout) 
         self.socket.connect(f"tcp://{host}:{port}")
         
-        # O nosso "carrinho de compras" de comandos
         self.command_buffer = {'velocities': {}, 'positions': {}}
         self.latest_state = {}
 
     def queue_velocity(self, path: str, velocity: float):
-        """ Classes como o TurtleBot chamam isso para agendar movimento """
+        """ Agendar comandos de velocidade para juntas de robôs"""
         self.command_buffer['velocities'][path] = velocity
 
     def queue_position(self, path: str, position: float):
@@ -22,7 +21,7 @@ class SimulationBridge:
         self.command_buffer['positions'][path] = position
 
     def get_sensor_data(self, path: str):
-        """ Classes como o LDS_02 chamam isso para ler o cache local """
+        """ Classes podem chamar para puxar o cachê, ou buffer de um determinado sensor"""
         return self.latest_state.get(path)
 
     def initialize(self, monitor_paths: list, actuator_paths: list, simulation) -> dict:
@@ -40,14 +39,13 @@ class SimulationBridge:
         payload = self.command_buffer.copy()
         payload["type"] = "STEP"
         
-        # 1. Envia comandos
+        # Envia comandos
         self.socket.send(cbor2.dumps(payload))
         self.command_buffer = {'velocities': {}, 'positions': {}}
         
-        # 2. Recebe a resposta (EM BYTES, não dê decode aqui!)
+        # Recebe a resposta 
         raw_bytes = self.socket.recv()
 
-       # 3. CBOR lê os bytes tranquilamente, incluindo as tabelas binárias do LIDAR
         raw_state = cbor2.loads(raw_bytes)
 
         self.latest_state = {}
@@ -73,9 +71,9 @@ class SimulationBridge:
         self.command_buffer[category][path] = value
         
     def close(self):
-        # Envia um comando de encerramento amigável (opcional, mas bom padrão)
+        # Envia um comando de encerramento
         try:
-            self.socket.setsockopt(zmq.RCVTIMEO, 100) # Timeout curtinho só pra fechar
+            self.socket.setsockopt(zmq.RCVTIMEO, 100)
             self.socket.send(cbor2.dumps({"type": "CLOSE"}))
             self.socket.recv()
         except:

@@ -80,35 +80,35 @@ class brainGUI:
         
         try:
             primeira_renderizacao = True
-            while True:
+            while True: #Fica num loop de criar e injetar na tela. A variável selected é utilizada até finalizar.
                 # Prepara todas as linhas do menu em uma lista (buffer)
                 linhas = []
                 linhas.append("") # Espaço vazio antes do menu
-                linhas.append("\033[90m┌" + "─" * (menu_width - 2) + "┐\033[0m")
+                linhas.append("\033[90m┌" + "─" * (menu_width - 2) + "┐\033[0m") #Abre a caixa com caracteres especiais
                 
                 titulo_formatado = f" {titulo} ".center(menu_width - 2)
-                linhas.append("\033[90m│\033[0m\033[1;96m" + titulo_formatado + "\033[0m\033[90m│\033[0m")
+                linhas.append("\033[90m│\033[0m\033[1;96m" + titulo_formatado + "\033[0m\033[90m│\033[0m") #Espaço para título
                 
-                if subtitulo:
+                if subtitulo: #Espaço para subtítulo
                     subt_formatado = f" {subtitulo} ".center(menu_width - 2)
                     linhas.append("\033[90m│\033[0m" + subt_formatado + "\033[90m│\033[0m")
                 
-                linhas.append("\033[90m├" + "─" * (menu_width - 2) + "┤\033[0m")
+                linhas.append("\033[90m├" + "─" * (menu_width - 2) + "┤\033[0m") #Feixando "parágrafo " da caixa
                 
                 for i, op in enumerate(opcoes):
                     if i == selected:
                         line = f"> {op}".ljust(menu_width - 2)
-                        linhas.append("\033[90m│\033[0m\033[7;36m" + line + "\033[0m\033[90m│\033[0m")
-                    else:
+                        linhas.append("\033[90m│\033[0m\033[7;36m" + line + "\033[0m\033[90m│\033[0m") #Colore apenas a opção!
+                    else: #Caso contrário só exibe
                         line = f"  {op}".ljust(menu_width - 2)
                         linhas.append("\033[90m│\033[0m" + line + "\033[90m│\033[0m")
                 
-                linhas.append("\033[90m└" + "─" * (menu_width - 2) + "┘\033[0m")
+                linhas.append("\033[90m└" + "─" * (menu_width - 2) + "┘\033[0m") #Aqui é só a caixa fechada
                 linhas.append("") # Espaço
-                linhas.append("Use \033[93m↑/↓\033[0m para navegar, \033[92mEnter\033[0m para selecionar.")
+                linhas.append("Use \033[93m↑/↓\033[0m para navegar, \033[92mEnter\033[0m para selecionar.") #Texto informativo
 
                 # Se não for a primeira vez, move o cursor para cima a quantidade exata de linhas!
-                if not primeira_renderizacao:
+                if not primeira_renderizacao: #Fica encima da primeira opção, mas de todo jeito estouo exibindo tudo
                     sys.stdout.write(f"\033[{len(linhas)}A")
                 primeira_renderizacao = False
                 
@@ -120,7 +120,7 @@ class brainGUI:
                     selected = (selected - 1) % len(opcoes)
                 elif key == 'DOWN':
                     selected = (selected + 1) % len(opcoes)
-                elif key == 'ENTER':
+                elif key == 'ENTER': #Retorna a opção selecionada, para ser utilizada por outra função, ou na função.
                     return selected
                 elif key == 'q':
                     return -1
@@ -178,7 +178,7 @@ class brainGUI:
             elif escolha == 2:
                 # Menu de confirmação (Y/N) usando a própria interface do sistema
                 opcoes_confirmacao = ["Sim (Y) - Apagar tudo", "Não (N) - Cancelar"]
-                confirmacao = self._menu_navegavel(
+                confirmacao = self._menu_navegavel( #Crio outro menu navegável para escolher a ação.
                     "CONFIRMAÇÃO",
                     opcoes_confirmacao,
                     msg_bot="Deseja mesmo apagar todos os logs?\nEsta ação não poderá ser desfeita.",
@@ -278,7 +278,7 @@ class brainGUI:
             sys.stdout.write('\033[?25h')
             sys.stdout.flush()
 
-    def _exibir_texto_com_bot(self, titulo, conteudo):
+    def _exibir_texto_com_bot(self, titulo, conteudo): #Padrão de desenho na tela!
         """Exibe uma tela informativa com a bot e aguarda tecla."""
         os.system('cls' if os.name == 'nt' else 'clear')
         self.banner()
@@ -304,12 +304,12 @@ class brainGUI:
             if item.is_dir() and not item.name.startswith((".", "__")):
                 topics.append(item.name)
                 
-        return sorted(topics)
+        return sorted(topics) #Retorna o nome das subpastas de projects/
     
     def _list_projects_in_topic(self,topic_name):
         """Lista as subpastas em 'projects/' que contêm um script .py correspondente"""
         # Certifique-se que self.projects_folder aponta para a pasta 'projects'
-        target_dir = Path.cwd() / "projects" / topic_name
+        target_dir = Path.cwd() / "projects" / topic_name #Diretório de procura
         
         if not target_dir.exists() or not target_dir.is_dir():
             self.logger.warning("A pasta 'projects' não foi encontrada.")
@@ -338,21 +338,20 @@ class brainGUI:
             return
         
         opcoes_topicos = topics_list + ["Voltar"]
-        idx_topico = self._menu_navegavel(
+        idx_topico = self._menu_navegavel( #Menu navegável para encontrar a opção de tópicos
             "ESCOLHER TÓPICO",
             opcoes_topicos,
             msg_bot="Escolha a categoria do projeto.",
             subtitulo=f"{len(topics_list)} tópicos disponíveis"
         )
 
-        if idx_topico is None or idx_topico == -1 or idx_topico == len(topics_list):
+        if idx_topico is None or idx_topico == -1 or idx_topico == len(topics_list): #Garante que é um idx real
             return
             
-        selected_topic = topics_list[idx_topico]
-
+        selected_topic = topics_list[idx_topico] #Pego o tópico correto (Vem o nome dos tópicos.)
 
         # Agora chamamos o método atualizado que lista pastas
-        projects_list = self._list_projects_in_topic(selected_topic) 
+        projects_list = self._list_projects_in_topic(selected_topic)  #Puxo a lista de pastas dentro do diretório com o tópico escolhido.
         
         if not projects_list:
             BOT_print("Nenhum projeto encontrado na pasta 'projects/'.", width=40)
@@ -360,7 +359,7 @@ class brainGUI:
             return
         
         opcoes_projetos = projects_list + ["Voltar"]
-        idx_proj = self._menu_navegavel(
+        idx_proj = self._menu_navegavel( #Gero outro menu navegável para escolher o projeto
             f"TÓPICO: {selected_topic.upper()}",
             opcoes_projetos,
             msg_bot="Agora, escolha o projeto para executar.",
@@ -371,26 +370,26 @@ class brainGUI:
             return
 
         selected_project = projects_list[idx_proj]
-        self.logger.info(f"Iniciando projeto: {selected_topic}/{selected_project}")
+        self.logger.info(f"Iniciando projeto: {selected_topic}/{selected_project}") #O projeto que foi selecionado.
         
         try:
             # LÓGICA DE IMPORTAÇÃO: projects.NomeDaPasta.NomeDoArquivo
             # Ex: projects.MeuRobo.MeuRobo
             module_path = f"projects.{selected_topic}.{selected_project}.{selected_project}"
-            module = importlib.import_module(module_path)
+            module = importlib.import_module(module_path) # pego o ponteiro para o objeto do módulo que eu escolhi
 
-            importlib.reload(module) 
+            importlib.reload(module)  # reinicio o módulo, garantindo que seja a primeira execução dele
             
-            os.system('cls' if os.name == 'nt' else 'clear')
+            os.system('cls' if os.name == 'nt' else 'clear') #Limpo a interface gráfica
             self.banner()
 
-            if hasattr(module, 'app'):
+            if hasattr(module, 'app'): #Verifico se no módulo tem o app(), que irá o abrir.
                 BOT_print(f"O projeto '{selected_project}' ({selected_topic}) foi iniciado. Para pausar ou cancelar clique em 'ctrl+c' ou 'x'.", width=45)
                 try:
-                    module.app()
+                    module.app()  #Executo o app() que está dentro do módulo
                 except Exception as e:
                     print("\n" + "="*50)
-                    print("💥 ERRO FATAL NO PROJETO:")
+                    print("ERRO FATAL NO PROJETO:")
                     traceback.print_exc()
                     print("="*50 + "\n")
                     input("Pressione ENTER para voltar ao menu...")
@@ -745,7 +744,7 @@ class brainGUI:
         return '\n'.join(lines)
 
     # ---------- Loop principal ----------
-    def run(self):
+    def run(self): #A gui roda num loop while, enquanto o projeto está sendo executado.
         """Método principal: exibe menu principal e despacha ações."""
         intro_text = (
             "Bem-vindo ao BRAINBYTE! Eu sou o Blue, seu agente guia. "
@@ -753,12 +752,9 @@ class brainGUI:
             "Use as setas para navegar e Enter para selecionar."
         )
         while True:
-            # Removidos os clear e banners daqui, pois o próprio _menu_navegavel cuidará disso 
-            # de forma inteligente ao montar a tela, evitando piscar ao voltar das opções.
-            
             opcoes_principal = [
                 "Iniciar simulação",      # 0
-                "Criar nova simulação",   # 1 <-- Nova opção inserida aqui
+                "Criar nova simulação",   # 1 
                 "Navegar pelo projeto",   # 2
                 "Comandos",               # 3
                 "Ver Logs",               # 4

@@ -9,8 +9,8 @@ import textwrap
 ORANGE = "\033[38;5;208m"
 BLACK = "\033[30m"
 BOLD = "\033[1m"
-BLUE = '\033[94m'  # Azul claro clássico
-CYAN = '\033[96m'  # Ciano (Um azul mais vibrante e tecnológico, tipo "neon")
+BLUE = '\033[94m'  
+CYAN = '\033[96m'  
 RESET = "\033[0m"
 
 

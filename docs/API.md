@@ -303,7 +303,19 @@ except Exception as e:
 
 ## Version History
 
-**v1.1.2** (Current)
+**v1.1.68** (Current)
+
+- Rewritten communication core: implemented SimulationBridge with ZeroMQ and CBOR, eliminating the bottleneck of the classic RemoteAPIClient.
+
+- The stepping engine (step) now delegates responsibility to the Threaded Lua script on the Coppelia side.
+
+- Added TurtleBot robot models.
+
+- Added control classes: AutoController and ManualController.
+
+- Integrated the updated Command Line Interface (CLI).
+
+**v1.1.2** 
 - Added `post_start()` lifecycle method
 - Improved sensor data validation patterns
 - Enhanced documentation
