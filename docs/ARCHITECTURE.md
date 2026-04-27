@@ -104,6 +104,7 @@ Sent exactly once before the simulation starts. It provides the Lua script with 
         "/TurtleBot/LiDAR_bin"
     ]
 }
+```
 
 **Outgoing Payload (Python $\rightarrow$ CoppeliaSim):**
 ```json
