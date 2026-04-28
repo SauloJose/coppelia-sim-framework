@@ -17,65 +17,67 @@ import logging
 from brainbyte import BaseApp
 from brainbyte.sensors import HokuyoSensorSim
 from brainbyte.robots.movel.PioneerBot import PioneerBot
+import os 
+
+plt.ion()
 
 def draw_laser_data(laser_data, max_sensor_range=5, show=False, save_path=None):
-    """Plots laser scan data in polar coordinates.
-
-    Args:
-        laser_data: Array of [angle, distance] pairs from Hokuyo sensor
-        max_sensor_range: Maximum range for axis limit (meters)
-        show: If True, attempts to display figure (may fail without GUI)
-        save_path: If provided, saves figure to this path
+    """Plots laser scan data in polar coordinates de forma eficiente."""
     
-    Note:
-        - Angles >= 0 are plotted in red
-        - Angles < 0 are plotted in blue
-        - Sensor origin marked with black triangle
-        - By default saves to timestamped file to avoid blocking
-    """
+    if laser_data is None or len(laser_data) == 0:
+        return 
+
+    # Criamos a figura
     fig = plt.figure(figsize=(6, 6), dpi=100)
     ax = fig.add_subplot(111, aspect='equal')
 
-    if laser_data is None:
-        return 
+    # Convertendo para coordenadas cartesianas de forma vetorizada (muito mais rápido)
+    angles = laser_data[:, 0]
+    distances = laser_data[:, 1]
+    
+    # Filtro de alcance
+    mask_range = (max_sensor_range - distances) > 0.1
+    
+    # Máscaras para cores (Red para >= 0, Blue para < 0)
+    mask_red = (angles >= 0) & mask_range
+    mask_blue = (angles < 0) & mask_range
 
-    # Combine angle and distance data for plotting
-    for ang, dist in laser_data:
-        # Filter out readings that are at the maximum range
-        if (max_sensor_range - dist) > 0.1:
-            x = dist * np.cos(ang)
-            y = dist * np.sin(ang)
-            c = 'r' if ang >= 0 else 'b'
-            ax.plot(x, y, 'o', color=c)
+    # Plotando os pontos em blocos
+    ax.plot(distances[mask_red] * np.cos(angles[mask_red]), 
+            distances[mask_red] * np.sin(angles[mask_red]), 'ro', markersize=2, label='Esquerda/Frente')
+    ax.plot(distances[mask_blue] * np.cos(angles[mask_blue]), 
+            distances[mask_blue] * np.sin(angles[mask_blue]), 'bo', markersize=2, label='Direita')
 
-    # Plot the sensor's origin
+    # Origem do robô
     ax.plot(0, 0, 'k>', markersize=10)
 
     ax.grid(True)
     ax.set_xlim([-max_sensor_range, max_sensor_range])
     ax.set_ylim([-max_sensor_range, max_sensor_range])
+    ax.set_title(f"Lidar Scan - {time.strftime('%H:%M:%S')}")
 
+    # Lógica de exibição/salvamento
     if save_path:
+        # Garante que a pasta existe
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
         fig.savefig(save_path)
         plt.close(fig)
-        return
-
-    if show:
+    elif show:
         try:
             plt.show(block=False)
-            plt.pause(0.1)
+            plt.pause(0.5) # Tempo para o SO renderizar a janela
+            # Se você quiser que a janela feche após mostrar, use plt.close(fig) aqui
         except Exception:
-            # Environment without GUI
-            print("Failed to show figure (no GUI). Saving to 'laser_plot.png'.")
+            print("Ambiente sem interface gráfica. Salvando em 'laser_plot.png'...")
             fig.savefig('laser_plot.png')
             plt.close(fig)
     else:
-        # Default: save to a timestamped file to avoid blocking
         timestamp = int(time.time())
-        filename = f'/projects/Sensores/lidar_exemple/Figures/laser_plot_{timestamp}.png'
+        filename = f'laser_plot_{timestamp}.png'
         fig.savefig(filename)
         plt.close(fig)
-        print(f"Laser plot saved to: {filename}")
+        print(f"Laser plot salvo como: {filename}")
+
 
 
 class LaserVisualizationExample(BaseApp):
@@ -159,32 +161,6 @@ class LaserVisualizationExample(BaseApp):
         pos = self.robot.pose
         self.logger.info(f'Initial robot position: x={pos[0]:.2f}, y={pos[1]:.2f}')
 
-        if getattr(self, 'auto_diagnostic', False):
-            self.logger.info("Running automatic diagnostic: motor pulse.")
-            try:
-                self.diagnostic_pulse(duration=1.0, speed=0.6)
-            except Exception:
-                self.logger.exception("Automatic diagnostic failed")
-
-    def diagnostic_pulse(self, duration=1.0, speed=0.6):
-        """Send velocity pulse to motors for hardware validation."""
-        self.logger.debug(f"Diagnostic pulse: v={speed}, w=0.0, duration={duration}s")
-        
-        # AJUSTE 5: Usa o tempo embutido no pacote da bridge e avança usando self.bridge.step()
-        start = self.bridge.latest_state.get('sim_time', 0.0)
-        try:
-            self.robot.set_wheel_velocity(speed, 0.0)
-            
-            while (self.bridge.latest_state.get('sim_time', 0.0) - start) < duration:
-                self.bridge.step() # Avança a física e envia os comandos em fila
-        finally:
-            try:
-                self.robot.stop()
-                self.bridge.step() # Garante que a fila de "stop" seja enviada pro simulador
-            except Exception:
-                self.logger.exception("Failed to zero velocities after diagnostic")
-            self.logger.info("Diagnostic complete: pulse finished")
-    
     def loop(self, t):
         """Main control loop executed at each simulation step.
 
@@ -205,26 +181,19 @@ class LaserVisualizationExample(BaseApp):
             # Plot laser data on first execution
             if self._first_exec is True:
                 draw_laser_data(laser_data, 5, True)
-            self._first_exec = False 
+                self._first_exec = False 
         except Exception:
             self.logger.exception("Error reading sensor data in loop.")
             return
 
-        n = len(laser_data)
-        
         # If camera hasn't rendered yet (first few steps), just wait
-        if n == 0: 
+        if len(laser_data) == 0: 
             return
 
         # Calculate indices for front/left/right based on array size (typically 684 points)
-        frente = int(n / 2)
-        lado_direito = int(n * 1 / 4)
-        lado_esquerdo = int(n * 3 / 4)
-
-        # Extract distance readings (column 1 has distances, column 0 has angles)
-        dist_frente = laser_data[frente, 1]
-        dist_esq = laser_data[lado_esquerdo, 1]
-        dist_dir = laser_data[lado_direito, 1]
+        dist_frente = laser_data[self.idx_frente, 1]
+        dist_esq = laser_data[self.idx_esq, 1]
+        dist_dir = laser_data[self.idx_dir, 1]
 
         # Log sensor readings (DEBUG level to avoid console spam in production)
         #self.logger.debug(f"[{t:.2f}s] Sensor -> Left: {dist_esq:.2f}m | Front: {dist_frente:.2f}m | Right: {dist_dir:.2f}m")
@@ -261,6 +230,7 @@ class LaserVisualizationExample(BaseApp):
         self.logger.info("Simulation stopping. Halting robot...")
         try:
             self.robot.stop()
+            plt.close('all')
         except Exception as e:
             self.logger.warning(f"Error while stopping robot: {e}")
 def app():

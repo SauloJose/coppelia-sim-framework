@@ -10,32 +10,6 @@ import matplotlib.pyplot as plt
 V_MAX = 0.5            # 0,5 m/s
 W_MAX = np.deg2rad(20) # 20 graus/s
 
-def get_command():
-    """
-    Retorna (v, w) baseado nas teclas pressionadas:
-        W / seta cima  → frente
-        S / seta baixo → trás
-        A / seta esq.  → gira no lugar (anti-horário)
-        D / seta dir.  → gira no lugar (horário)
-    Se nenhuma tecla for pressionada, retorna (0.0, 0.0).
-    """
-    v = 0.0
-    w = 0.0
-
-    # Movimento linear (frente/trás)
-    if keyboard.is_pressed('w') or keyboard.is_pressed('up'):
-        v += V_MAX
-    if keyboard.is_pressed('s') or keyboard.is_pressed('down'):
-        v -= V_MAX
-
-    # Movimento angular (rotação)
-    if keyboard.is_pressed('a') or keyboard.is_pressed('left'):
-        w += W_MAX
-    if keyboard.is_pressed('d') or keyboard.is_pressed('right'):
-        w -= W_MAX
-
-    return v, w
-    
 
 # Aqui está a definição da classe que representa a simulação
 class turtleBot(BaseApp):
