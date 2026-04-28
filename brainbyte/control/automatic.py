@@ -236,7 +236,7 @@ class DifferentialController:
         # Configuração do filtro Low-Pass
         self.dt = dt
         self.tau = 0.3
-        self.filter_alpha = self.dt / self.tau  # Renomeado para evitar conflito
+        self.alpha = self.dt / self.tau  # Renomeado para evitar conflito
 
     def set_SP(self, set_point):
         """
@@ -306,30 +306,41 @@ class DifferentialController:
         return self.v_cmd, self.w_cmd 
     
     def get_control(self, actual_point: np.ndarray):
-        # Força a conversão para numpy array caso receba uma lista
         actual_point = np.asarray(actual_point)
-
-        # 1. Calcula erros polares
         rho, alpha, beta = self._calc_logic(actual_point, self.set_point)
         
-        # 2. Lógica de direção (Permitir ré se o alvo estiver atrás)
+        # 1. Definição de Tolerâncias (Thresholds)
+        rho_tol = 0.05    # 5 cm
+        theta_tol = 0.05  # ~3 graus
+        
+        # 2. Lógica de Direção (Frente/Ré)
         direction = 1.0
         if alpha > np.pi/2 or alpha < -np.pi/2:
             direction = -1.0
             alpha = normalize_angle(alpha + np.pi)
             beta = normalize_angle(beta + np.pi)
 
-        # 3. Leis de controle
+        # 3. Cálculo das Velocidades Brutas
         v_raw = direction * self.k_rho * rho
         w_raw = self.k_alpha * alpha + self.k_beta * beta
         
-        # 4. Tratamento de zona morta / Chegada no destino
-        if rho < 0.01:
+        # 4. TRATAMENTO DA CHEGADA (ZONA MORTA)
+        # Se estiver longe do ponto, segue o baile.
+        # Se estiver perto (rho < rho_tol), para de transladar e só rotaciona.
+        if rho < rho_tol:
             v_raw = 0.0
-            # Apenas ajusta a orientação final (Beta)
-            w_raw = self.k_beta * normalize_angle(self.set_point[2] - actual_point[2])
-            if abs(normalize_angle(self.set_point[2] - actual_point[2])) < 0.02:
+            # Erro de orientação final direto
+            error_theta = normalize_angle(self.set_point[2] - actual_point[2])
+            
+            # Se o ângulo também estiver bom, para tudo
+            if abs(error_theta) < theta_tol:
                 w_raw = 0.0
+                # Truque: resetar o filtro interno para parar imediatamente
+                self.v_cmd = 0.0
+                self.w_cmd = 0.0
+                return 0.0, 0.0
+            else:
+                # Se ainda não alinhou o ângulo, usa um ganho proporcional simples
+                w_raw = 0.5 * error_theta # Ganho fixo menor para alinhamento fino
 
-        # 5. Aplica o filtro de saída e retorna
         return self.output_filter(v_raw, w_raw)

@@ -61,12 +61,12 @@ class Controle_de_caminho(BaseApp):
 
             self.control = DifferentialController(pos_init=position,
                                                   set_point=pos_desejada,
-                                                  k_alpha=2,
-                                                  k_beta=-0.5,
-                                                  k_rho=0.8,
+                                                  k_alpha=0.8,
+                                                  k_beta=-0.1,
+                                                  k_rho=0.3,
                                                   dt = self.dt)  
 
-            self.control._setup_output_filter(4, self.dt) #low_pass_filter
+            self.control._setup_output_filter(0.1, self.dt) #low_pass_filter
            
             self.robot.add_control(control_name='AUTO_DIFF',
                                    control_instance=self.control)
