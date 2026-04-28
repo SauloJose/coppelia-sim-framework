@@ -143,4 +143,7 @@ def T_homo(R, p):
     T[:3, 3] = p
     return T
 
-
+# Função utilitária fora da classe para total compatibilidade com njit
+@njit
+def normalize_angle(angle):
+    return (angle + np.pi) % (2 * np.pi) - np.pi

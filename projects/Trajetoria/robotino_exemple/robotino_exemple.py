@@ -35,13 +35,14 @@ class RobotinoSimu(BaseApp):
         pos = self.robot.pose
         self.logger.info(f'Initial robot position: x={pos[0]:.2f}, y={pos[1]:.2f}')
     
-    def loop(self, t):
+    def loop(self,t):
         """ Etapas do loop"""
         try:
+            t = self.simu_time()
             #Lógica de enviar velocidades
-            if t <= 10:
-                self.robot.set_velocity_rot([5,5], 0)
-            elif t <= 30:
+            if t <= 5:
+                self.robot.set_velocity_rot([2,2], 0)
+            elif t <= 10:
                 self.robot.direct_cin(10,-10,10)
             else:
                 self.robot.direct_cin(10,-10,-10)

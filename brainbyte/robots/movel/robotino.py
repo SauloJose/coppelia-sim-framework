@@ -19,7 +19,16 @@ class Robotino(BaseBot):
 
         # PARÂMETROS FÍSICOS
         self._L = 0.135   # Distância do centro do robô até a roda (m)
-        self._R = 0.04    # Raio da roda (m)
+        self._R = 0.0625    # Raio da roda (m)
+        
+        
+        # LIMITES FÍSICOS
+        self._v_max = 2.78                  # m/s (10 km/h)
+        self._w_max = 2                     # rad/s (~115º/s)
+        self._wheel_max = 4.0 * 2*np.po     # rad/s (4 rps)
+
+
+        # Cinemática
         self.H = np.zeros((3, 3))      # Matriz de Cinemática Inversa
         self.H_inv = np.zeros((3, 3))  # Matriz de Cinemática Direta
         
@@ -104,11 +113,33 @@ class Robotino(BaseBot):
         """
         vx, vy = linear_vel
         omega = angular_vel
-        self._robot_vel = np.array([vx, vy, omega])
+
+        ### Limitações reais
+        # velocidade linear
+        v_vec = np.array([vx, vy])
+        v_norm = np.linalg.norm(v_vec)
+        if v_norm > self._v_max:
+            v_vec = v_vec * (self._v_max / v_norm)
+        vx, vy = v_vec
+
+        #velocidade angular 
+        omega = np.clip(omega, -self._w_max, self._w_max)
 
         # Multiplicação de matrizes correta usando '@' (ou .dot())
         V_chassi = np.array([vx, vy, omega])
-        self._wheel_vels = self.H @ V_chassi
+        wheels_cmd = self.H @ V_chassi
+
+        # Limitação das rodas
+        max_w = np.max(np.abs(wheel_cmds))
+        if max_w > self._wheel_max:
+            scale = self._wheel_max / max_w
+            wheel_cmds *= scale
+            # Atualiza o estado real do chassi após redução
+            v_chassi = self.H_inv @ wheel_cmds
+
+        # Armazena estados e envia ao simulador
+        self._robot_vel = v_chassi
+        self._wheel_vels = wheel_cmds 
 
         # Enfileira as velocidades no "carrinho de compras" da Bridge
         self.bridge.queue_command('velocities', self.joints['wheel0'], float(self._wheel_vels[0]))
@@ -125,16 +156,23 @@ class Robotino(BaseBot):
         :return: Array [vx, vy, omega] representando a velocidade resultante do robô.
         """
         # 1. Salva as velocidades angulares
-        self._wheel_vels = np.array([float(w0), float(w1), float(w2)])
+        cmds = np.array([float(w0), float(w1), float(w2)])
+
+        # Satuação simétrica das rodas
+        max_w = np.max(np.abs(cmds))
+        if max_w > self._wheel_max:
+            cmds = cmds * (self._wheel_max/max_w)
+
+        #Atualiza estados
+        self._wheel_vels = cmds 
+        self._robot_vel = self.H_inv @ cmds 
         
         # Enfileira as velocidades 
         self.bridge.queue_command('velocities', self.joints['wheel0'], float(self._wheel_vels[0]))
         self.bridge.queue_command('velocities', self.joints['wheel1'], float(self._wheel_vels[1]))
         self.bridge.queue_command('velocities', self.joints['wheel2'], float(self._wheel_vels[2]))
         
-        # Atualiza o estado interno (Direta) multiplicando a pseudo-inversa pelas velocidades das rodas
-        self._robot_vel = self.H_inv @ self._wheel_vels
-        
+
         return self._robot_vel
     
     

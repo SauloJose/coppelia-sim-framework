@@ -128,7 +128,7 @@ class BaseApp:
                     self.logger.error("Error detected on Keyboard input (request sudo in Linux/Mac). Press Ctrl+C to stop.")
                 
                 # IMPORTANT: Here is the logic of my simulation! The child-class have to make this.
-                self.loop(t)
+                self.loop(self.simu_time())
 
                 # IMPORTANT: Here is a very useful thing. Using self.bridge.step() we call the ZeroMQ API to communicate the 
                 # state of the simulation, so, this is VERY IMPORTANT AND NECESSARY to mantain here!

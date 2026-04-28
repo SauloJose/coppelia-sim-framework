@@ -40,9 +40,15 @@ class PioneerBot(BaseBot):
         
         
         # PARÂMETROS FÍSICOS
+        self._mass = 17   # kg
         self._R = 0.0975  # Raio da roda (m)
         self._L = 0.381   # Distância entre as rodas (Wheelbase) (m)
         
+        # LIMITES FÍSICOS 
+        self._v_max = 1.6 #m/s
+        self._w_max = 5.2 #rad/s
+
+        # Cinemática
         self.H = np.zeros((2, 2))      # Matriz de Cinemática Inversa
         self.H_inv = np.zeros((2, 2))  # Matriz de Cinemática Direta
         
@@ -122,10 +128,25 @@ class PioneerBot(BaseBot):
         Cinemática Inversa: Define velocidades linear (m/s) e angular (rad/s) do chassi,
         calcula as velocidades necessárias nas rodas e as aplica no simulador.
         """
-        self._robot_vel = np.array([linear_vel, angular_vel])
+        #Saturação do chassi 
+        v_cmd = np.clip(linear_vel, -self._v_max, self._v_max)
+        w_cmd = np.clip(angular_vel, -self._w_max, self._w_max)
+
+        # Cinemática inversa (wl, wr)
+        wl, wr = self.H @ np.array([v_cmd, w_cmd])
         
-        # Multiplicação matricial: [wl, wr]^T = H @ [v, omega]^T
-        self._wheel_vels = self.H @ self._robot_vel
+        # Respeito os limites das rodas (wheel_max = v_max/r)
+        wheel_max = self._v_max / self._R
+        max_w = max(abs(wl), abs(wr))
+        if max_w > wheel_max:
+            scale = wheel_max / max_w
+            wl *= scale
+            wr *= scale
+            v_cmd, w_cmd = self.H_inv @ np.array([wl, wr])
+
+        # Atualiza estado interno 
+        self._robot_vel = np.array([v_cmd, w_cmd])
+        self._wheel_vels = np.array([wl, wr])
 
         # Enfileira na Bridge (convertendo para float nativo)
         self.bridge.queue_command('velocities', self.joints['left_wheel'], float(self._wheel_vels[0]))
@@ -133,17 +154,25 @@ class PioneerBot(BaseBot):
 
     def direct_cin(self, wl, wr):
         """
-        MODO 2 (Piloto de Baixo Nível): Controle pelas rodas usando Cinemática Direta.
-        Você fornece a velocidade de cada roda (rad/s) diretamente.
+        Comando direto das rodas com saturação realista.
         """
+        wheel_max = self._v_max / self._R
+
+        #  Saturação com fator de escala (preserva relação wl/wr) 
+        max_w = max(abs(wl), abs(wr))
+        if max_w > wheel_max:
+            scale = wheel_max / max_w
+            wl *= scale
+            wr *= scale
+
+        #  Atualiza estado interno 
         self._wheel_vels = np.array([wl, wr])
-        
-        # Enfileira na Bridge
-        self.bridge.queue_command('velocities', self.joints['left_wheel'], float(self._wheel_vels[0]))
-        self.bridge.queue_command('velocities', self.joints['right_wheel'], float(self._wheel_vels[1]))
-        
-        # Atualiza o estado interno
         self._robot_vel = self.H_inv @ self._wheel_vels
+
+        #  Envia ao simulador 
+        self.bridge.queue_command('velocities', self.joints['left_wheel'], float(wl))
+        self.bridge.queue_command('velocities', self.joints['right_wheel'], float(wr))
+
         return self._robot_vel
 
     

@@ -4,7 +4,7 @@
 #
 # ===========================================================================
 from brainbyte.utils.math import * 
-
+ 
 # Controlador PID 
 class PID_Controller:
     def __init__(self, var, kp, ki, kd, dt, set_point):
@@ -211,3 +211,125 @@ class On_Off_Controller:
             # Se o erro estiver dentro da banda de histerese, a saída anterior é mantida
 
         return self.output
+    
+class DifferentialController:
+    def __init__(self, pos_init: np.ndarray,
+                 set_point: np.ndarray,
+                 k_rho: float,
+                 k_alpha: float,
+                 k_beta: float,
+                 dt: float = 0.05):
+        
+        # Ganhos do controlador
+        self.k_rho = k_rho
+        self.k_alpha = k_alpha
+        self.k_beta = k_beta
+
+        # Estados
+        self.set_point = set_point    
+        self.current_state = pos_init 
+
+        # Saídas de comando (inicializadas sem underscore para consistência)
+        self.v_cmd = 0.0
+        self.w_cmd = 0.0 
+
+        # Configuração do filtro Low-Pass
+        self.dt = dt
+        self.tau = 0.3
+        self.filter_alpha = self.dt / self.tau  # Renomeado para evitar conflito
+
+    def set_SP(self, set_point):
+        """
+        Define um novo objetivo (Set Point) para o controlador perseguir.
+        """
+        self.set_point = set_point
+
+    @staticmethod
+    @njit
+    def _calc_logic(actual, set_point):
+        """
+        Cálculo puramente matemático das coordenadas polares de erro.
+        Usa @njit para ser compilado em código de máquina e rodar em microsegundos.
+        
+        Calcula:
+        - rho: Distância Euclidiana $\sqrt{\Delta x^2 + \Delta y^2}$
+        - alpha: Ângulo entre a frente do robô e a linha do objetivo
+        - beta: Ângulo entre a linha do objetivo e a orientação final
+        """
+        dx = set_point[0] - actual[0]
+        dy = set_point[1] - actual[1]
+        theta = actual[2]
+
+        rho = np.sqrt(dx**2 + dy**2)
+        
+        # Alpha: ângulo para o objetivo em relação à frente do robô
+        alpha = normalize_angle(np.arctan2(dy, dx) - theta)
+        
+        # Beta: ajuste da orientação final
+        beta = normalize_angle(set_point[2] - theta - alpha)
+        
+        return rho, alpha, beta
+
+    def set_parameters(self, k_rho, k_alpha, k_beta):
+        """
+        Permite atualizar os ganhos dinamicamente e valida as condições de estabilidade
+        de Lyapunov para evitar que o robô se comporte de forma errática.
+        """
+        # Condição de estabilidade: k_rho > 0, k_beta < 0, k_alpha > k_rho
+        if k_rho <= 0 or k_beta >= 0:
+            print("Aviso: Ganhos podem não garantir estabilidade (Recomendado: k_rho > 0, k_beta < 0)")
+        
+        self.k_rho = k_rho
+        self.k_alpha = k_alpha
+        self.k_beta = k_beta
+
+    def _setup_output_filter(self, tau:float, dt):
+        """
+        Method to setup the configurations of the output low-pass filter
+        
+        v_out[k+1] = v_out[k] + (alpha)*(v_target - v_out[k])
+
+        where alpha is approximaly dt/tau (1-e^(dt/tau))
+        """
+        self.tau = tau 
+        self.dt  = dt
+
+        if self.tau > 0:
+            self.alpha = 1.0 - np.exp(-self.dt / self.tau)
+        else:
+            self.alpha = 1.0 # Sem filtro (resposta instantânea)
+
+    def output_filter(self, v, w):
+        """Aplica o filtro Low-Pass nas saídas"""
+        self.v_cmd += self.alpha * (v - self.v_cmd)
+        self.w_cmd += self.alpha * (w - self.w_cmd)
+        return self.v_cmd, self.w_cmd 
+    
+    def get_control(self, actual_point: np.ndarray):
+        # Força a conversão para numpy array caso receba uma lista
+        actual_point = np.asarray(actual_point)
+
+        # 1. Calcula erros polares
+        rho, alpha, beta = self._calc_logic(actual_point, self.set_point)
+        
+        # 2. Lógica de direção (Permitir ré se o alvo estiver atrás)
+        direction = 1.0
+        if alpha > np.pi/2 or alpha < -np.pi/2:
+            direction = -1.0
+            alpha = normalize_angle(alpha + np.pi)
+            beta = normalize_angle(beta + np.pi)
+
+        # 3. Leis de controle
+        v_raw = direction * self.k_rho * rho
+        w_raw = self.k_alpha * alpha + self.k_beta * beta
+        
+        # 4. Tratamento de zona morta / Chegada no destino
+        if rho < 0.01:
+            v_raw = 0.0
+            # Apenas ajusta a orientação final (Beta)
+            w_raw = self.k_beta * normalize_angle(self.set_point[2] - actual_point[2])
+            if abs(normalize_angle(self.set_point[2] - actual_point[2])) < 0.02:
+                w_raw = 0.0
+
+        # 5. Aplica o filtro de saída e retorna
+        return self.output_filter(v_raw, w_raw)

@@ -53,20 +53,29 @@ class Controle_de_caminho(BaseApp):
             self.handshake()
 
             #Controlador do robô
-            v_max = .5
-            w_max = np.deg2rad(20)
+            # Informações iniciais 
+            position = self.robot.pose
 
-            self.control = KeyboardController(v_max=v_max, w_max=w_max)
-
+            pos_desejada = np.array([2,2,np.deg2rad(40)]) #(3,3,40º)
             self.dt = self.d_time()
-            self.control._setup_output_filter(0.5, self.dt) #low_pass_filter
-            self.robot.add_control(control_name='KEYBOARD',
+
+            self.control = DifferentialController(pos_init=position,
+                                                  set_point=pos_desejada,
+                                                  k_alpha=2,
+                                                  k_beta=-0.5,
+                                                  k_rho=0.8,
+                                                  dt = self.dt)  
+
+            self.control._setup_output_filter(4, self.dt) #low_pass_filter
+           
+            self.robot.add_control(control_name='AUTO_DIFF',
                                    control_instance=self.control)
             
             self.logger.info("Handshake with CoppeliaSim: OK!")  
 
         except Exception as e:
             self.logger.error(f"Error detected in setup(): {e}")
+            self.logger.error(traceback.format_exc())
             
     def post_start(self):
         """Executado uma única vez após o startSimulation(). Ideal para leituras iniciais."""
@@ -93,11 +102,14 @@ class Controle_de_caminho(BaseApp):
         Implemente aqui a lógica de controle principal, leitura de sensores e atualização de atuadores.
         """
         try:
-            # Adicione a lógica do loop aqui
+            # Adicione a lógica do loop aqui (força ser um numpy array)
+            actual_pos = self.robot.pose 
+
             #Controlador manual
-            v_cmd,w_cmd = self.control.get_command()
+            v_cmd,w_cmd = self.control.get_control(actual_point=actual_pos)
             
             self.robot.set_wheel_velocity(linear_vel=v_cmd,angular_vel=w_cmd)
+        
         except Exception as e:
             self.logger.error(f"Error detected in loop(): {e}")
 

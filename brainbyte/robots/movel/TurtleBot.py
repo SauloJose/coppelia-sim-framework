@@ -29,6 +29,13 @@ class TurtleBot(BaseBot):
         self._wheel_mof_about_the_diameter = 1.12e-5 #
         self._wheel_mof_about_the_axis= 2.07e-5
 
+        #Velocidade máxima do robô
+        # Velocidade máxima do chassi (linear e angular)
+        self._v_max = 0.31               # m/s
+        self._w_max = np.deg2rad(45)     # rad/s  (45°/s)
+
+        # Limite real das rodas (calculado a partir de v_max)
+        self._wheel_max = self._v_max / self._R   # rad/s
         
         # Matrizes de cinemática
         self.H = np.zeros((2, 2))      # Matriz de Cinemática Inversa
@@ -109,32 +116,53 @@ class TurtleBot(BaseBot):
 
     def set_wheel_velocity(self, linear_vel, angular_vel):
         """
-        Cinemática Inversa: Define velocidades linear (m/s) e angular (rad/s) do chassi,
-        calcula as velocidades necessárias nas rodas e as aplica no simulador.
+        Cinemática Inversa com saturação de chassi e de rodas.
         """
-        self._robot_vel = np.array([linear_vel, angular_vel])
-        
-        # Multiplicação matricial: [wl, wr]^T = H @ [v, omega]^T
-        self._wheel_vels = self.H @ self._robot_vel
+        # Saturação do chassi 
+        v_cmd = np.clip(linear_vel, -self._v_max, self._v_max)
+        w_cmd = np.clip(angular_vel, -self._w_max, self._w_max)
 
-        # Envia comados para o buffer da Bridge
-        self.bridge.queue_command('velocities', self.joints['left_wheel'], float(self._wheel_vels[0]))
-        self.bridge.queue_command('velocities', self.joints['right_wheel'], float(self._wheel_vels[1]))
-    
+        # Cinemática inversa (wl, wr) 
+        wl, wr = self.H @ np.array([v_cmd, w_cmd])
+
+        #  Respeito aos limites das rodas (wheel_max = v_max / R) 
+        wheel_max = self._v_max / self._R
+        max_w = max(abs(wl), abs(wr))
+        if max_w > wheel_max:
+            scale = wheel_max / max_w
+            wl *= scale
+            wr *= scale
+            v_cmd, w_cmd = self.H_inv @ np.array([wl, wr])
+
+        # Atualiza estado interno 
+        self._robot_vel = np.array([v_cmd, w_cmd])
+        self._wheel_vels = np.array([wl, wr])
+
+        # Envia comandos ao simulador 
+        self.bridge.queue_command('velocities', self.joints['left_wheel'], float(wl))
+        self.bridge.queue_command('velocities', self.joints['right_wheel'], float(wr))
+
     def direct_cin(self, wl, wr):
         """
-        MODO 2 (Piloto de Baixo Nível): Controle pelas rodas usando Cinemática Direta.
-        Você fornece a velocidade de cada roda (rad/s) diretamente.
+        Comando direto das rodas com saturação realista.
         """
-        self._wheel_vels = np.array([wl, wr])
-        
-        # ENFILEIRA NO BUFFER DA BRIDGE
-        self.bridge.queue_command('velocities', self.joints['left_wheel'], float(self._wheel_vels[0]))
-        self.bridge.queue_command('velocities', self.joints['right_wheel'], float(self._wheel_vels[1]))
+        wheel_max = self._v_max / self._R
 
-        # Atualiza o estado interno do robô (Direta) para sabermos a que velocidade o chassi está indo
+        #  Saturação com fator de escala (preserva relação wl/wr) 
+        max_w = max(abs(wl), abs(wr))
+        if max_w > wheel_max:
+            scale = wheel_max / max_w
+            wl *= scale
+            wr *= scale
+
+        #  Atualiza estado interno 
+        self._wheel_vels = np.array([wl, wr])
         self._robot_vel = self.H_inv @ self._wheel_vels
-        
+
+        #  Envia ao simulador 
+        self.bridge.queue_command('velocities', self.joints['left_wheel'], float(wl))
+        self.bridge.queue_command('velocities', self.joints['right_wheel'], float(wr))
+
         return self._robot_vel
 
     
