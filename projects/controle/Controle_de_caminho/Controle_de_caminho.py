@@ -75,6 +75,8 @@ class Controle_de_caminho(BaseApp):
                                                   k_rho=0.3,
                                                   dt = self.dt)  
 
+            self.control.set_max_values(v_max = self.robot._v_max, w_max = self.robot._w_max)
+            
             self.robot.add_control(control_name='AUTO_DIFF',
                                    control_instance=self.control)
             

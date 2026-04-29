@@ -47,9 +47,6 @@ class turtleBot(BaseApp):
         w_max = np.deg2rad(20)
         self.control = KeyboardController(v_max=v_max, w_max=w_max)
 
-        # Variáveis computadas 
-        self.dt = self.d_time()
-
         #Buffers para os pontos calculados
         self.buffer = PointCloudAccumulator(max_point=100000)
 

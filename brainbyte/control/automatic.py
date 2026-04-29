@@ -70,8 +70,8 @@ class PID_Controller:
 
     def _calc_integral(self, error, dt):
         """Termo integral com anti-windup simples (limitação não incluída)."""
-        self.cum_error += error * dt
-        return self.ki * self.cum_error
+        cum_error += error * dt
+        return cum_error, self.ki * cum_error
 
     def _calc_derivative(self, error, dt):
         """Termo derivativo (derivada do erro)."""
@@ -83,7 +83,7 @@ class PID_Controller:
             return np.zeros_like(error)
         
 
-    def run(self, y):
+    def run(self, y, u_min=-1, u_max=1):
         """
         Executa uma iteração do controlador.
 
@@ -101,6 +101,8 @@ class PID_Controller:
         """
         dt = self.dt
         y = self._make_compatible(y)
+        u_min = self._make_compatible(u_min)
+        u_max = self._make_compatible(u_max)
 
         # Erro atual
         self.error = self.set_point - y
@@ -108,19 +110,30 @@ class PID_Controller:
         # Termo proporcional
         P = self._calc_proportional(self.error)
 
-        #Termo integral
-        I = self._calc_integral(self.error, dt)
-
         #Termo derivativo
         D = self._calc_derivative(self.error, dt)
 
-        #Atualiza o último erro
-        self.last_error = self.error.copy() if isinstance(self.error, np.ndarray) else self.error
+        # Termo integrativo
+        new_cum, I = self._calc_integral(self.error, dt)
 
-        # Saída total
-        self.output = P + I +D
+        u_unsat = P+I+D
 
-        return self.output 
+        # Lógica de Clamping compatível com Escalares e Arrays
+        # Se (Saturado em cima E erro positivo) OU (Saturado em baixo E erro negativo)
+        is_saturated_high = (u_unsat > u_max) & (self.error > 0)
+        is_saturated_low  = (u_unsat < u_min) & (self.error < 0)
+        dont_integrate = is_saturated_high | is_saturated_low
+
+        if isinstance(self.error, np.ndarray):
+            # Se for array, usamos np.where para decidir junta por junta
+            self.cum_error = np.where(dont_integrate, self.cum_error, new_cum)
+        else:
+            # Se for escalar, usamos o if comum
+            if not dont_integrate:
+                self.cum_error = new_cum
+
+        self.output = np.clip(u_unsat, u_min, u_max)
+        return self.output
 
 class On_Off_Controller:
     def __init__(self, 
@@ -278,6 +291,16 @@ class DifferentialController:
         self.k_alpha = k_alpha
         self.k_beta = k_beta
     
+    def set_max_values(self, 
+                       v_max =1.0, 
+                       a_max = 0.5, 
+                       w_max = 2.0, 
+                       alpha_max =1.0):
+        self._v_max = v_max
+        self._a_max = a_max 
+        self._w_max = w_max 
+        self._alpha_max = alpha_max 
+
     def get_control(self, actual_point: np.ndarray):
         actual_point = np.asarray(actual_point)
         rho, alpha, beta = self._calc_logic(actual_point, self.set_point)

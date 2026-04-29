@@ -67,6 +67,7 @@ verify_and_install_dependencies()
 sys.path.insert(0, str(BASE_DIR))
 
 # Agora sim fazemos os imports do projeto com segurança
+
 from brainbyte.gui.cli import brainGUI
 from brainbyte.core import *
 
