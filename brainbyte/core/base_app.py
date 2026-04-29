@@ -26,6 +26,7 @@ from brainbyte.robots import *
 from brainbyte.utils.logging import setup_logger
 from brainbyte.utils import *
 from brainbyte.core.bridge import SimulationBridge 
+import socket
 import traceback
     
 class BaseApp:
@@ -55,8 +56,12 @@ class BaseApp:
         self.log_file = log_file
         
         self.logger.info("Attempting to connect to CoppeliaSim engine...")
-        self.logger.info("If the terminal freezes, please open CoppeliaSim!")
-        
+        self.logger.info("You have 10 seconds to open CoppeliaSim!")
+
+        if not self._wait_for_simulator(timeout=10.0):
+            self.logger.error("TIMEOUT: The simulator failed to open within 10 seconds. Closing.")
+            sys.exit(1)
+
         try:
             # The code will "freeze" here if the simulator is closed
             self.client = RemoteAPIClient()
@@ -75,7 +80,24 @@ class BaseApp:
             self.logger.error("CONNECTION ERROR: Could not establish communication.")
             self.logger.exception(f"Error detected in __init__ BaseApp: Details: {e}")
             sys.exit(1)
-
+            
+    def _wait_for_simulator(self, host='localhost', port=23000, timeout=10.0):
+        """
+        Tenta estabelecer uma conexão TCP simples para verificar se o simulador está online.
+        Pinga a porta a cada 0.5 segundos até o tempo limite acabar.
+        """
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            try:
+                # Tenta criar uma conexão. O timeout de 0.5 impede que fique preso.
+                with socket.create_connection((host, port), timeout=0.5):
+                    return True
+            except (ConnectionRefusedError, socket.timeout, OSError):
+                # Se a porta estiver fechada, espera meio segundo e tenta de novo
+                time.sleep(0.5)
+        
+        return False
+    
     def run(self):
         try:
             # Load scene
@@ -160,12 +182,27 @@ class BaseApp:
         """
         return self.sim.getSimulationTimeStep()
     
+    @property
+    def dt(self):
+        """
+        Propriedade que chama dinamicamente self.d_time().
+        Permite acessar o tempo de simulação usando apenas self.dt nas classes filhas.
+        """
+        return self.d_time()
+    
     def simu_time(self):
         """
         Returns the current simulation time.
         """
         return self.sim.getSimulationTime()
     
+    @property
+    def st(self):
+        """
+        Propriedade que chama dinamicamente self.d_time().
+        Permite acessar o tempo de simulação usando apenas self.dt nas classes filhas.
+        """
+        return self.simu_time()
     # ==========================================
     # METHODS TO BE OVERRIDDEN IN CHILD CLASSES
     # ==========================================

@@ -569,6 +569,7 @@ class brainGUI:
             # Prompt de comando
             cmd_input = input("\n\033[92m> \033[0m").strip()
             if not cmd_input:
+                current_depth = 1
                 os.system('cls' if os.name == 'nt' else 'clear')
                 self.banner()
                 print(BOT_say("Navegador de projeto. Digite 'help' para ver comandos."))
@@ -579,6 +580,7 @@ class brainGUI:
             arg = parts[1] if len(parts) > 1 else ""
             
             if command in ("exit", "q", "quit"):
+                current_depth = 1
                 break
             elif command == "help":
                 self._show_nav_help()
@@ -609,12 +611,14 @@ class brainGUI:
                 print(BOT_say(f"Comando desconhecido: '{command}'. Digite 'help'.", width=50))
                 current_depth = 1
             else:
-                print(BOT_say("Navegador de projeto. Digite 'help' para ver comandos."))
-            
+                print(BOT_say("Navegador de projeto. Digite 'help' para ver comandos."))  
+
             #reseto erro
             erro_cmd = False 
 
     def _show_nav_help(self):
+        os.system('cls' if os.name == 'nt' else 'clear')
+        self.banner()
         # O dedent remove os espaços à esquerda gerados pela indentação do código
         help_text = dedent("""\
             Comandos disponíveis:

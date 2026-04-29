@@ -54,19 +54,29 @@ class Controle_de_caminho(BaseApp):
 
             #Controlador do robô
             # Informações iniciais 
-            position = self.robot.pose
+            position = self.robot.pose #(x,y,theta) -> Em versões futuras vou ajustar
 
-            pos_desejada = np.array([2,2,np.deg2rad(40)]) #(3,3,40º)
-            self.dt = self.d_time()
-
+            #Lista de posições para o robô seguir
+            self.list_pos = np.array([[2,2,np.deg2rad(40)],
+                                 [2,-2,np.deg2rad(90)],
+                                 [-2,2,np.deg2rad(45)],
+                                 [-2,-2,np.deg2rad(50)],
+                                 [1,1,np.deg2rad(180)],
+                                 [0, 0,0]
+                                 ])
+            
+            #Variável para iteração 
+            self.it = 0 
+            
             self.control = DifferentialController(pos_init=position,
-                                                  set_point=pos_desejada,
+                                                  set_point=self.list_pos[0],
                                                   k_alpha=0.8,
                                                   k_beta=-0.1,
                                                   k_rho=0.3,
                                                   dt = self.dt)  
 
-            self.control._setup_output_filter(tau=0.05, dt=self.dt) #low_pass_filter
+            # Filtro de saída
+            self.control._setup_output_filter(tau=0.025, dt=self.dt) 
            
             self.robot.add_control(control_name='AUTO_DIFF',
                                    control_instance=self.control)
@@ -101,15 +111,28 @@ class Controle_de_caminho(BaseApp):
         Núcleo de execução contínua. 
         Implemente aqui a lógica de controle principal, leitura de sensores e atualização de atuadores.
         """
+
         try:
             # Adicione a lógica do loop aqui (força ser um numpy array)
             actual_pos = self.robot.pose 
 
             #Controlador manual
-            v_cmd,w_cmd = self.control.get_control(actual_point=actual_pos)
-            
+            v_cmd,w_cmd = self.robot.get_control('AUTO_DIFF').get_control(actual_point=actual_pos)
+
             self.robot.set_wheel_velocity(linear_vel=v_cmd,angular_vel=w_cmd)
-        
+            
+            if v_cmd == 0 and w_cmd == 0: #Passo para o próximo ponto
+                if self.it  < len(self.list_pos)-1:
+                    self.it = self.it + 1 #incremento
+                    self.robot.get_control('AUTO_DIFF').set_SP(self.list_pos[self.it])
+                    self.logger.info(f"Indo para o ponto {self.it}: {self.list_pos[self.it]}")
+                else: #chegou ao fim da lista de pontos
+                    # Chegou no último ponto!
+                    self.logger.info("Percurso finalizado! Último ponto alcançado.")
+                    
+                    # Garante que o robô fique parado
+                    self.stop()
+
         except Exception as e:
             self.logger.error(f"Error detected in loop(): {e}")
 
@@ -127,4 +150,5 @@ def app():
     Instancia a classe e inicia o ciclo de vida (run) para integração com o gerenciador BRAINBYTE.
     """
     aplicacao = Controle_de_caminho()
+
     aplicacao.run()
