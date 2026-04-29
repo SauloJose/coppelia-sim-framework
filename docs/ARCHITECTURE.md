@@ -47,8 +47,17 @@ Sent exactly once before the simulation starts. It provides the Lua script with 
 ```json
 {
   "type": "INIT",
-  "monitor": ["/TurtleBot/Lidar", "/TurtleBot/Vision_sensor", "//TurtleBotWheel_Encoder"],
-  "actuators": ["/TurtleBot/Left_Motor", "/TurtleBot/Right_Motor", "/RoboticArm/Joint1"]
+  "monitor": [
+    "/TurtleBot/Sensors/Lidar_bin",
+    "/TurtleBot/Sensors/Camera_RGB_bin",
+    "/TurtleBot/Odometry/Pose_3D"
+  ],
+  "actuators": [
+    "/TurtleBot/Drive/Left_Wheel_Motor",
+    "/TurtleBot/Drive/Right_Wheel_Motor",
+    "/TurtleBot/Manipulator/Joint_1",
+    "/TurtleBot/Manipulator/Gripper"
+  ]
 }
 ```
 
@@ -56,14 +65,18 @@ Sent exactly once before the simulation starts. It provides the Lua script with 
 Sent every frame. Contains the batched commands accumulated during the Python loop.
 ```json
 {
-    "type": "STEP",
-    "velocities": {
-        "/TurtleBot/leftMotor": 1.5, 
-        "/TurtleBot/rightMotor": 1.5
-    },
-    "positions": {
-        "/RoboticArm/Joint1": 0.785
-    }
+  "type": "STEP",
+  "velocities": {
+    "/TurtleBot/Drive/Left_Wheel_Motor": 2.15,
+    "/TurtleBot/Drive/Right_Wheel_Motor": 2.15,
+    "/TurtleBot/Manipulator/Joint_1": 0.5
+  },
+  "positions": {
+    "/TurtleBot/Manipulator/Gripper": 0.01
+  },
+  "teleports": {
+    "/TurtleBot/Base_link": [1.0, 2.5, 0.0]
+  }
 }
 ```
 
@@ -76,6 +89,27 @@ Received every frame. Notice that paths are used as literal dictionary keys. Thi
 }
 ```
 
+**4. Model**
+```python
+# 1. Enfileirando velocidades para as rodas baseadas no path hierárquico
+bridge.queue_velocity("/TurtleBot/Drive/Left_Wheel_Motor", 2.15)
+bridge.queue_velocity("/TurtleBot/Drive/Right_Wheel_Motor", 2.15)
+
+# 2. Enfileirando velocidade e posição para o braço manipulador
+bridge.queue_velocity("/TurtleBot/Manipulator/Joint_1", 0.5)
+bridge.queue_position("/TurtleBot/Manipulator/Gripper", 0.01)
+
+# 3. Usando o comando genérico para reposicionar (teleportar) o robô inteiro
+bridge.queue_command("teleports", "/TurtleBot/Base_link", [1.0, 2.5, 0.0])
+
+# 4. Envia tudo (gera o JSON STEP), avança um frame, e recebe os sensores
+state = bridge.step()
+
+# 5. Acessando os dados recebidos com os mesmos paths longos
+nuvem_de_pontos_lidar = state.get("/TurtleBot/Sensors/Lidar_bin")
+posicao_atual = state.get("/TurtleBot/Odometry/Pose_3D")
+
+```
 ---
 
 ## 3. BaseApp Execution Lifecycle
