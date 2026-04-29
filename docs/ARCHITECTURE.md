@@ -84,8 +84,10 @@ Sent every frame. Contains the batched commands accumulated during the Python lo
 Received every frame. Notice that paths are used as literal dictionary keys. This flat structure allows Python to update its cache instantly.
 ```json
 {
-    "/TurtleBot/GPS": [1.2, 0.5, 0.0],
-    "/TurtleBot/LiDAR_bin": <binary_bytes>
+  "/TurtleBot/Odometry/Pose_3D": [1.2, 0.5, 0.0],
+  "/TurtleBot/Drive/Left_Wheel_Encoder": 14.32,
+  "/TurtleBot/Sensors/Lidar_bin": b'\xcd\xcc\x8c?\x9a\x99\x19@\x00\x00\x00\x00...',
+  "/TurtleBot/Sensors/Camera_RGB_bin": b'\x00\x00\x80?\x00\x00\x00@\x00\x00\x00...'
 }
 ```
 
