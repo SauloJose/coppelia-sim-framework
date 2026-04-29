@@ -34,7 +34,7 @@ class KeyboardController:
 
         self.dt    = .05 #default 50 ms
         self.tau   = 0.3
-        self.alpha = self.dt/self.tau  #time constant
+        self.alpha = self.alpha = self.dt / (self.tau+self.dt)  # Renomeado para evitar conflito
 
     def _setup_output_filter(self, tau:float, dt):
         """

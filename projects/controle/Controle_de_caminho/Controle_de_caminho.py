@@ -66,7 +66,7 @@ class Controle_de_caminho(BaseApp):
                                                   k_rho=0.3,
                                                   dt = self.dt)  
 
-            self.control._setup_output_filter(0.1, self.dt) #low_pass_filter
+            self.control._setup_output_filter(tau=0.05, dt=self.dt) #low_pass_filter
            
             self.robot.add_control(control_name='AUTO_DIFF',
                                    control_instance=self.control)

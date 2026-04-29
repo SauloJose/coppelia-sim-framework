@@ -554,6 +554,7 @@ class brainGUI:
         self.banner()
         print(BOT_say("Navegador de projeto. Digite 'help' para ver comandos."))
         current_depth = 1 
+        erro_cmd = False 
         # Loop principal do navegador
         while True:
             # Exibe caminho atual e árvore
@@ -563,7 +564,8 @@ class brainGUI:
                 print(tree)
             else:
                 print("   (pasta vazia)")
-            
+
+
             # Prompt de comando
             cmd_input = input("\n\033[92m> \033[0m").strip()
             if not cmd_input:
@@ -596,14 +598,21 @@ class brainGUI:
                 self._nav_del_file(arg)
                 current_depth = 1
             else:
-                print(BOT_say(f"Comando desconhecido: '{command}'. Digite 'help'.", width=50))
+                erro_cmd = True 
                 current_depth = 1
             
             # Limpa a tela para próxima iteração (opcional, para manter a navegação limpa)
             # Se quiser manter histórico, remova os clears abaixo.
             os.system('cls' if os.name == 'nt' else 'clear')
             self.banner()
-            print(BOT_say("Navegador de projeto. Digite 'help' para ver comandos."))
+            if erro_cmd:
+                print(BOT_say(f"Comando desconhecido: '{command}'. Digite 'help'.", width=50))
+                current_depth = 1
+            else:
+                print(BOT_say("Navegador de projeto. Digite 'help' para ver comandos."))
+            
+            #reseto erro
+            erro_cmd = False 
 
     def _show_nav_help(self):
         # O dedent remove os espaços à esquerda gerados pela indentação do código
