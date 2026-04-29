@@ -232,12 +232,7 @@ class DifferentialController:
         # Saídas de comando (inicializadas sem underscore para consistência)
         self.v_cmd = 0.0
         self.w_cmd = 0.0 
-
-        # Configuração do filtro Low-Pass
-        self.dt = dt
-        self.tau = 0.3
-        self.alpha = self.dt / self.tau  # Renomeado para evitar conflito
-
+        
     def set_SP(self, set_point):
         """
         Define um novo objetivo (Set Point) para o controlador perseguir.
@@ -282,28 +277,6 @@ class DifferentialController:
         self.k_rho = k_rho
         self.k_alpha = k_alpha
         self.k_beta = k_beta
-
-    def _setup_output_filter(self, tau:float, dt):
-        """
-        Method to setup the configurations of the output low-pass filter
-        
-        v_out[k+1] = v_out[k] + (alpha)*(v_target - v_out[k])
-
-        where alpha is approximaly dt/tau (1-e^(dt/tau))
-        """
-        self.tau = tau 
-        self.dt  = dt
-
-        if self.tau > 0:
-            self.alpha = 1.0 - np.exp(-self.dt / self.tau)
-        else:
-            self.alpha = 1.0 # Sem filtro (resposta instantânea)
-
-    def output_filter(self, v, w):
-        """Aplica o filtro Low-Pass nas saídas"""
-        self.v_cmd += self.alpha * (v - self.v_cmd)
-        self.w_cmd += self.alpha * (w - self.w_cmd)
-        return self.v_cmd, self.w_cmd 
     
     def get_control(self, actual_point: np.ndarray):
         actual_point = np.asarray(actual_point)
@@ -343,4 +316,4 @@ class DifferentialController:
                 # Se ainda não alinhou o ângulo, usa um ganho proporcional simples
                 w_raw = 0.5 * error_theta # Ganho fixo menor para alinhamento fino
 
-        return self.output_filter(v_raw, w_raw)
+        return v_raw, w_raw

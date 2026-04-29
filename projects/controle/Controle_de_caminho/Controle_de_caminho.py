@@ -75,9 +75,6 @@ class Controle_de_caminho(BaseApp):
                                                   k_rho=0.3,
                                                   dt = self.dt)  
 
-            # Filtro de saída
-            self.control._setup_output_filter(tau=0.025, dt=self.dt) 
-           
             self.robot.add_control(control_name='AUTO_DIFF',
                                    control_instance=self.control)
             
