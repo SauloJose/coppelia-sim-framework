@@ -46,13 +46,9 @@ The communication relies on specific dictionary structures encoded in CBOR. Here
 Sent exactly once before the simulation starts. It provides the Lua script with a list of all object paths that Python intends to monitor or control. The Lua engine finds their integer handles and caches them internally, avoiding slow string lookups during the main loop.
 ```json
 {
-    "type": "INIT",
-    "paths": [
-        "/TurtleBot/leftMotor",
-        "/TurtleBot/rightMotor",
-        "/TurtleBot/GPS",
-        "/TurtleBot/LiDAR_bin"
-    ]
+  "type": "INIT",
+  "monitor": ["/TurtleBot/Lidar", "/TurtleBot/Vision_sensor", "//TurtleBotWheel_Encoder"],
+  "actuators": ["/TurtleBot/Left_Motor", "/TurtleBot/Right_Motor", "/RoboticArm/Joint1"]
 }
 ```
 
