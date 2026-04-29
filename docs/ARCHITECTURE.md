@@ -91,24 +91,23 @@ Received every frame. Notice that paths are used as literal dictionary keys. Thi
 
 **4. Model**
 ```python
-# 1. Enfileirando velocidades para as rodas baseadas no path hierárquico
+# 1. Queuing speeds for the wheels based on the hierarchical path
 bridge.queue_velocity("/TurtleBot/Drive/Left_Wheel_Motor", 2.15)
 bridge.queue_velocity("/TurtleBot/Drive/Right_Wheel_Motor", 2.15)
 
-# 2. Enfileirando velocidade e posição para o braço manipulador
+# 2. Queuing speed and position for the manipulator arm
 bridge.queue_velocity("/TurtleBot/Manipulator/Joint_1", 0.5)
 bridge.queue_position("/TurtleBot/Manipulator/Gripper", 0.01)
 
-# 3. Usando o comando genérico para reposicionar (teleportar) o robô inteiro
+# 3. Using the generic command to reposition (teleport) the entire robot
 bridge.queue_command("teleports", "/TurtleBot/Base_link", [1.0, 2.5, 0.0])
 
-# 4. Envia tudo (gera o JSON STEP), avança um frame, e recebe os sensores
+# 4. Send everything (Generates the JSON STEP), advances one frame, and receives the sensors
 state = bridge.step()
 
-# 5. Acessando os dados recebidos com os mesmos paths longos
-nuvem_de_pontos_lidar = state.get("/TurtleBot/Sensors/Lidar_bin")
-posicao_atual = state.get("/TurtleBot/Odometry/Pose_3D")
-
+# 5. Accessing the data obtained with the same long paths
+lidar_point_cloud = state.get("/TurtleBot/Sensors/Lidar_bin")
+current_position = state.get("/TurtleBot/Odometry/Pose_3D")
 ```
 ---
 
