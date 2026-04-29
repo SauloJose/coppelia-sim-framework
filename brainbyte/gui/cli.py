@@ -553,12 +553,12 @@ class brainGUI:
         os.system('cls' if os.name == 'nt' else 'clear')
         self.banner()
         print(BOT_say("Navegador de projeto. Digite 'help' para ver comandos."))
-
+        current_depth = 1 
         # Loop principal do navegador
         while True:
             # Exibe caminho atual e árvore
             print(f"\n\033[1;96m📁 {self.current_nav_path}\033[0m")
-            tree = self._generate_tree(self.current_nav_path, max_depth=1)
+            tree = self._generate_tree(self.current_nav_path, max_depth=current_depth)
             if tree.strip():
                 print(tree)
             else:
@@ -567,6 +567,9 @@ class brainGUI:
             # Prompt de comando
             cmd_input = input("\n\033[92m> \033[0m").strip()
             if not cmd_input:
+                os.system('cls' if os.name == 'nt' else 'clear')
+                self.banner()
+                print(BOT_say("Navegador de projeto. Digite 'help' para ver comandos."))
                 continue
             
             parts = cmd_input.split(maxsplit=1)
@@ -577,17 +580,24 @@ class brainGUI:
                 break
             elif command == "help":
                 self._show_nav_help()
+                current_depth = 1
             elif command in ("ls", "dir", "tree"):
-                # Apenas reexibe (já mostramos acima, mas podemos forçar)
-                continue
+                if arg.isdigit():
+                    current_depth = int(arg)
+                else:
+                    current_depth = 3
             elif command == "cd":
                 self._nav_change_directory(arg)
+                current_depth = 1
             elif command == "open":
                 self._nav_open_file(arg)
+                current_depth = 1
             elif command == "del":
                 self._nav_del_file(arg)
+                current_depth = 1
             else:
                 print(BOT_say(f"Comando desconhecido: '{command}'. Digite 'help'.", width=50))
+                current_depth = 1
             
             # Limpa a tela para próxima iteração (opcional, para manter a navegação limpa)
             # Se quiser manter histórico, remova os clears abaixo.
