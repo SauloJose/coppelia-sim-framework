@@ -245,6 +245,11 @@ class DifferentialController:
         # Saídas de comando (inicializadas sem underscore para consistência)
         self.v_cmd = 0.0
         self.w_cmd = 0.0 
+
+        self.v_max = 1
+        self.a_max = 3
+        self.w_max = 6
+        self.a_max = 6
         
     def set_SP(self, set_point):
         """
@@ -293,50 +298,57 @@ class DifferentialController:
     
     def set_max_values(self, 
                        v_max =1.0, 
-                       a_max = 0.5, 
-                       w_max = 2.0, 
-                       alpha_max =1.0):
-        self._v_max = v_max
-        self._a_max = a_max 
-        self._w_max = w_max 
-        self._alpha_max = alpha_max 
+                       a_max = 4.0, 
+                       w_max = 10.0, 
+                       alpha_max =4.0):
+        self.v_max = v_max
+        self.a_max = a_max 
+        self.w_max = w_max 
+        self.alpha_max = alpha_max 
 
-    def get_control(self, actual_point: np.ndarray):
+    def get_control(self, actual_point: np.ndarray, dt: float = 0.05):
         actual_point = np.asarray(actual_point)
         rho, alpha, beta = self._calc_logic(actual_point, self.set_point)
         
-        # 1. Definição de Tolerâncias (Thresholds)
-        rho_tol = 0.05    # 5 cm
-        theta_tol = 0.05  # ~3 graus
+        rho_tol = 0.05
+        theta_tol = 0.05
         
-        # 2. Lógica de Direção (Frente/Ré)
         direction = 1.0
         if alpha > np.pi/2 or alpha < -np.pi/2:
             direction = -1.0
             alpha = normalize_angle(alpha + np.pi)
             beta = normalize_angle(beta + np.pi)
 
-        # 3. Cálculo das Velocidades Brutas
-        v_raw = direction * self.k_rho * rho
-        w_raw = self.k_alpha * alpha + self.k_beta * beta
+        # 1. Velocidades Brutas baseadas no erro
+        v_target = direction * self.k_rho * rho
+        w_target = self.k_alpha * alpha + self.k_beta * beta
         
-        # 4. TRATAMENTO DA CHEGADA (ZONA MORTA)
-        # Se estiver longe do ponto, segue o baile.
-        # Se estiver perto (rho < rho_tol), para de transladar e só rotaciona.
+        # 2. Tratamento de Chegada (sua lógica original mantida)
         if rho < rho_tol:
-            v_raw = 0.0
-            # Erro de orientação final direto
+            v_target = 0.0
             error_theta = normalize_angle(self.set_point[2] - actual_point[2])
-            
-            # Se o ângulo também estiver bom, para tudo
             if abs(error_theta) < theta_tol:
-                w_raw = 0.0
-                # Truque: resetar o filtro interno para parar imediatamente
-                self.v_cmd = 0.0
-                self.w_cmd = 0.0
+                w_target = 0.0
+                self.v_cmd, self.w_cmd = 0.0, 0.0
                 return 0.0, 0.0
             else:
-                # Se ainda não alinhou o ângulo, usa um ganho proporcional simples
-                w_raw = 0.5 * error_theta # Ganho fixo menor para alinhamento fino
+                w_target = 0.5 * error_theta
 
-        return v_raw, w_raw
+        # 3. SATURAÇÃO DE VELOCIDADE (Limite máximo do motor)
+        v_target = np.clip(v_target, -self.v_max, self.v_max)
+        w_target = np.clip(w_target, -self.w_max, self.w_max)
+
+        # 4. SLEW RATE (Limite de Aceleração) - A "Mágica" que substitui o filtro
+        # Em vez de um filtro, dizemos: "A velocidade só pode mudar X por ciclo"
+        max_dv = self.a_max * dt
+        max_dw = self.alpha_max * dt # alpha_max aqui é aceleração angular
+
+        # Aplica o limite na variação da velocidade
+        dv = np.clip(v_target - self.v_cmd, -max_dv, max_dv)
+        dw = np.clip(w_target - self.w_cmd, -max_dw, max_dw)
+
+        # Atualiza o estado de comando interno
+        self.v_cmd += dv
+        self.w_cmd += dw
+
+        return self.v_cmd, self.w_cmd

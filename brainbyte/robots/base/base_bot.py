@@ -2,49 +2,50 @@ from abc import ABC, abstractmethod
 from brainbyte.utils import *
 from brainbyte.utils.math import * 
 
-# Importando todos os sensores
+# Import all sensors
 from brainbyte.sensors import * 
 
 
 class BaseBot(ABC):
-    """
-    Classe base abstrata para qualquer robô no CoppeliaSim (Arquitetura Batch Dataflow).
-    Fornece:
-    - Acesso à Bridge de comunicação síncrona
-    - Caminho do objeto raiz do robô (String Path)
-    - Gerenciamento de sensores e controladores
-    - Métodos para declarar quais endpoints o Lua deve monitorar
+    """Abstract base class for any robot in CoppeliaSim (Batch Dataflow Architecture).
+    
+    Provides:
+    - Access to synchronous Bridge for communication
+    - Path to the robot root object (String Path hierarchy)
+    - Sensor and controller management
+    - Methods to declare which endpoints Lua should monitor
     """
 
     def __init__(self, bridge, robot_name):
-        """
+        """Initialize robot instance.
+        
         Args:
-            bridge: Instância de SimulationBridge para comunicação em lote.
-            robot_name: Nome do objeto raiz do robô na cena (ex: 'Turtlebot3').
+            bridge: SimulationBridge instance for batch communication.
+            robot_name: Name of robot root object in scene (e.g., 'Turtlebot3').
         """
         self.bridge = bridge
         self.robot_name = robot_name
 
         self.robot_path = f'/{robot_name}'
 
-        self._sensores =   {} #sensores associados ao robô
-        self._control  =   {} #Guardo os controles do robô
+        self._sensores = {}   # Sensors attached to this robot
+        self._control = {}    # Controllers attached to this robot
 
-    # PROPRIEDADES
+    # PROPERTIES
     @property
     def pose(self):
+        """Return robot pose [x, y, theta] directly from simulator.
+        
+        Uses get_pose() method from BaseBot class.
         """
-        Retorna a pose real do robô [x, y, theta] diretamente do simulador.
-        Utiliza o método get_pose() herdado da classe BaseBot.
-        """
-        # pos = [x, y, z] e ori = [alpha, beta, gamma]
+        # pos = [x, y, z] and ori = [alpha, beta, gamma]
         pos, ori = self.get_pose() 
         
-        # Proteção para o primeiro frame (antes da bridge receber os dados)
+        # Protection for first frame (before bridge receives data)
         if pos is None or ori is None:
             return np.array([0.0, 0.0, 0.0])
         
-        # Para um robô planar, queremos X, Y e a rotação no eixo Z (gamma)
+        # For a planar robot, we want X, Y and rotation around Z axis (gamma)
         x, y = pos[0], pos[1]
         theta = ori[2] 
         
@@ -52,16 +53,14 @@ class BaseBot(ABC):
 
     @pose.setter
     def pose(self, new_pose):
-        """
-        Teleporta o robô para uma nova pose [x, y, theta] no CoppeliaSim.
-        """
+        """Teleport robot to a new pose [x, y, theta] in CoppeliaSim."""
         if len(new_pose) != 3:
-            raise ValueError("A pose deve conter 3 elementos: [x, y, theta].")
+            raise ValueError("Pose must contain 3 elements: [x, y, theta].")
         
         x, y, theta = new_pose
         
-        # Pegamos a pose atual para não alterar a altura (Z) 
-        # e as rotações de inclinação (alpha, beta) acidentalmente.
+        # Get current pose to not alter height (Z)
+        # and inclination rotations (alpha, beta) accidentally
         pos_atual, ori_atual = self.get_pose()
         if pos_atual is None:
             z, alpha, beta = 0.0, 0.0, 0.0
@@ -70,7 +69,7 @@ class BaseBot(ABC):
             alpha = ori_atual[0]
             beta = ori_atual[1]
 
-        # Enfileira na Bridge um comando da categoria 'teleports'
+        # Queue teleport command to Bridge
         dados_teleporte = {'pos': [float(x), float(y), float(z)], 
                            'ori': [float(alpha), float(beta), float(theta)]}
         self.bridge.queue_command('teleports', self.robot_path, dados_teleporte)

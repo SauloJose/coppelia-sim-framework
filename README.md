@@ -1,65 +1,92 @@
 # Brainbyte - Professional Robot Simulation Framework
 
-A comprehensive Python framework for controlling and testing robot simulations in CoppeliaSim using the RemoteAPI ZMQ interface.
+A comprehensive Python framework for controlling and testing robot simulations in CoppeliaSim using a high-performance ZeroMQ bridge with CBOR2 binary serialization.
 
 ## Features
 
-✨ **Professional Logging System** - Standardized, emoji-free logging without compromises  
-🎯 **BaseApp Architecture** - Complete simulation lifecycle management  
-📊 **Built-in Visualization** - Plot2D/Plot3D standardized plotting functions  
-🔧 **DRY Principles** - Reduced code duplication and improved maintainability  
-🚀 **Production Ready** - Proper packaging with setup.py, pyproject.toml, and tests  
-📚 **Well Documented** - Comprehensive docstrings and example implementations
+**Batch Dataflow Architecture** - Queue commands, send once per frame, receive all sensor data in binary format  
+**Professional Logging System** - Standardized, emoji-free logging to console and file  
+**BaseApp Lifecycle Management** - Complete simulation lifecycle with setup, post_start, loop, and stop phases  
+**High-Performance ZMQ Bridge** - Synchronous REQ/REP communication with CBOR2 binary serialization for minimal latency  
+**Robot & Sensor Abstractions** - Extensible base classes (BaseBot, BaseSensor) for rapid robot/sensor development  
+**Built-in Visualization** - Standardized Plot2D() and Plot3D() functions for trajectory visualization  
+**Interactive CLI** - Beautiful terminal-based menu for launching projects with automatic discovery  
+**Production Ready** - Proper packaging with setup.py, pyproject.toml, professional logging, and test suite
 
 ## Project Structure
 
 ```text
 brainbyte/                       # Main package
 ├── logs/                        # Log files directory
-│   ├── main.log                 # GUI interface logs
-│   └── simulation.log           # Simulation execution logs
 ├── core/
-│   ├── base_app.py              # BaseApp - simulation lifecycle management
-│   ├── bridge.py                # ZMQ communication bridge
-│   └── logging.py               # Core logging setup
-├── utils/
-│   ├── basics/                  # Templates and base files
-│   │   ├── app.txt              # Application template
-│   │   └── sim.ttt              # Basic simulation scene
-│   ├── logging.py               # Utility logging functions
-│   ├── plotting.py              # Plot2D() and Plot3D() visualization
-│   └── math.py                  # Mathematical calculations and utilities
-├── robots/                      # Robot models and classes
+│   ├── base_app.py              # BaseApp - simulation lifecycle (setup, loop, stop)
+│   ├── bridge.py                # SimulationBridge - ZMQ batch dataflow communication
+│   ├── paths.py                 # Path utilities
+│   └── __init__.py
+├── gui/
+│   ├── cli.py                   # Interactive terminal menu (brainGUI)
+│   ├── auxF.py                  # CLI utilities (BOT_say, BOT_print, get_key)
+│   └── __init__.py
+├── robots/
 │   ├── base/
-│   │   └── base_robot.py        # Parent class for all robot models
+│   │   ├── base_bot.py          # BaseBot abstract class (pose, sensors, controls)
+│   │   └── __init__.py
+│   ├── movel/                   # Mobile robots
+│   │   ├── TurtleBot.py         # Differential drive robot (v_max=0.31 m/s)
+│   │   ├── Robotino.py          # Omnidirectional robot
+│   │   ├── PioneerBot.py        # Another differential robot
+│   │   └── Manta.py             # Hexapod robot
 │   ├── arms/                    # Robotic arm implementations
 │   ├── humanoid/                # Humanoid robot implementations
-│   ├── models/                  # .ttt models to import into CoppeliaSim
-│   └── movel/                   # Mobile robots (Pioneer, TurtleBot, Manta, Robotino, etc.)
-├── gui/
-│   ├── auxF.py                  # Auxiliary functions for the GUI
-│   └── cli.py                   # Beautiful CLI-based GUI implementation
-└── sensors/                     # Sensor implementations (extensible)
+│   ├── models/                  # CoppeliaSim .ttm model files
+│   └── __init__.py
+├── sensors/
+│   ├── base/
+│   │   ├── base_sensor.py       # BaseSensor abstract class
+│   │   └── __init__.py
+│   ├── HokuyoSensor.py          # Hokuyo LIDAR sensor
+│   ├── LDS_02.py                # TurtleBot LIDAR sensor
+│   └── __init__.py
+├── utils/
+│   ├── logging.py               # setup_logger() - professional logging
+│   ├── plotting.py              # Plot2D(), Plot3D() - trajectory visualization
+│   ├── math.py                  # Mathematical utilities (gram_schmidt, etc)
+│   ├── basics/                  # Templates and base files
+│   │   ├── app.txt              # Application template
+│   │   └── scene.ttt            # Basic simulation scene
+│   └── __init__.py
+├── control/
+│   ├── automatic.py             # Controllers (PID, OnOff, DifferentialController)
+│   ├── manual.py                # Manual control implementations
+│   └── __init__.py
+└── __init__.py
 
 projects/                        # Project storage organized by topics
-├── locomotion/                  # Topic category
-│   └── my_locomotion_project/   # Specific project folder
-│       ├── my_locomotion_project.py # Main script (matches folder name)
-│       └── scene.ttt            # CoppeliaSim scene file for this project
-└── obstacle_avoidance/          # Topic category
-    └── lidar_avoidance/         # Specific project folder
-        ├── lidar_avoidance.py   
-        └── lidar_avoidance.ttt  
+├── Trajetoria/
+│   ├── malha_aberta_exemplo/    # Open-loop control example
+│   ├── malha_fechada_exemplo/   # Closed-loop control example
+│   ├── PID_exemple/             # PID controller example
+│   └── robotino_exemple/        # Robotino robot example
+├── Sensores/
+│   ├── lidar_exemple/           # LIDAR sensor example
+│   └── turtleBot/               # TurtleBot project
+├── Obstaculos/                  # Obstacle avoidance projects
+└── controle/
+    └── Controle_de_caminho/     # Path control example
 
-tests/                           # Unit tests
-docs/                            # Documentation
-config/                          # Configuration files
-
+config.json                      # Configuration (installed dependencies)
 main.py                          # Interactive menu launcher
 setup.py                         # Package installation
 pyproject.toml                   # Project metadata
+requirements.txt                 # Runtime dependencies
 requirements-dev.txt             # Development dependencies
-.gitignore                       # Git ignore rules
+LICENSE                          # License file
+
+docs/                            # Documentation
+├── README.md                    # This file
+├── API.md                       # API reference
+├── ARCHITECTURE.md              # Architecture documentation
+└── CONTRIBUTING.md              # Contribution guidelines
 ```
 
 ## Installation
@@ -67,21 +94,32 @@ requirements-dev.txt             # Development dependencies
 ### Requirements
 
 - Python 3.8+
-- CoppeliaSim 4.4.0 or later
-- ZMQ Remote API enabled in CoppeliaSim
+- CoppeliaSim 4.4.0 or later (with ZMQ RemoteAPI plugin)
+- zmq (libzmq) system library
 
 ### Setup
 
 ```bash
-# Using pip
+# Clone or download the repository
+cd UFCG/ESTUDO/Framework
+
+# Install package with dependencies
 pip install -e .
 
-# Or with development dependencies
-pip install -e ".[dev]"
-
-# Or using requirements
+# Or install from requirements
 pip install -r requirements.txt
+
+# With development dependencies (testing, linting)
+pip install -r requirements-dev.txt
 ```
+
+### Verify Installation
+
+```bash
+# Run the main launcher
+python main.py
+```
+This will display an interactive menu to select and run available projects.
 
 ## Quick Start
 
@@ -91,195 +129,274 @@ pip install -r requirements.txt
 python main.py
 ```
 
-Select from the interactive CLI menu to run available projects. 
-* **Graceful Stop:** Press 's' during execution to stop the simulation.
-* **Emergency Stop:** Press Ctrl+C.
+You'll see an interactive terminal menu showing available projects organized by topic. Use arrow keys to navigate and Enter to select.
+
+**Controls during execution:**
+- Press **'x'** during execution to stop the simulation gracefully
+- Press **Ctrl+C** for emergency stop
 
 ### Creating a New Simulation
 
-1. **Create a new project folder and files** inside a topic category in `projects/` (e.g., `projects/locomotion/my_robot/`). The Python script must match the folder's name, and the scene file should be placed alongside it:
-   * `projects/locomotion/my_robot/my_robot.py`
-   * `projects/locomotion/my_robot/my_robot.ttt`
-2. **Inherit from BaseApp** inside your `.py` file:
+1. **Create project folder structure** inside `projects/` with a topic category:
+   ```
+   projects/
+   └── MyTopic/
+       └── my_project/
+           ├── my_project.py       # Must match folder name
+           └── my_project.ttt      # CoppeliaSim scene file
+   ```
+
+2. **Implement your simulation class** inheriting from `BaseApp`:
 
 ```python
-from brainbyte.core.base_app import BaseApp
-from brainbyte.core.logging import setup_logger
+from brainbyte import BaseApp
+from brainbyte.robots import TurtleBot
+from brainbyte.sensors import LDS_02
+from brainbyte.utils.logging import setup_logger
+import numpy as np
 
-logger = setup_logger(__name__, '[APP]')
+logger = setup_logger(__name__, '[MYAPP]')
 
-class MyRobotSimulation(BaseApp):
+class MyProjectSimulation(BaseApp):
     def __init__(self):
-        # Point to the .ttt file in the same directory
-        super().__init__(scene_file="my_robot.ttt", sim_time=30.0)
-    
+        """Initialize with scene file and simulation time."""
+        super().__init__(
+            scene_file="my_project.ttt",
+            sim_name="MyProject",
+            sim_time=60.0  # seconds
+        )
+
     def setup(self):
         """Called once before simulation starts."""
-        logger.info("Setting up robot...")
-        self.robot_handle = self.sim.getObject('/MyRobot')
-        self.left_motor = self.sim.getObject('/MyRobot/leftMotor')
-        self.right_motor = self.sim.getObject('/MyRobot/rightMotor')
-    
+        # Instantiate robots and sensors
+        self.robot = TurtleBot(
+            bridge=self.bridge,
+            robot_name='MyRobot'
+        )
+        self.lidar = LDS_02(bridge=self.bridge, base_name='MyRobot')
+        self.robot.add_sensor('lidar', self.lidar)
+        
+        # Initialize handshake with CoppeliaSim
+        self.handshake()
+
+    def handshake(self):
+        """Define which paths to monitor and control."""
+        monitor_paths = [
+            '/MyRobot_pos',
+            '/MyRobot_ori',
+            '/MyRobot/Lidar_bin'
+        ]
+        actuator_paths = [
+            '/MyRobot/left_Motor',
+            '/MyRobot/right_Motor'
+        ]
+        self.bridge.initialize(monitor_paths, actuator_paths, self.sim)
+
+    def post_start(self):
+        """Called after first simulation step."""
+        logger.info(f"Robot initial pose: {self.robot.pose}")
+
     def loop(self, t):
-        """Called at each simulation step."""
-        # Control logic here
-        self.sim.setJointTargetVelocity(self.left_motor, 0.5)
-        self.sim.setJointTargetVelocity(self.right_motor, 0.5)
-    
+        """Main control loop called every simulation step."""
+        # Read sensors from cache (no network overhead)
+        lidar_data = self.lidar.get_bridge_data('_bin')
+        robot_pos = self.robot.pose
+        
+        # Simple forward motion
+        self.bridge.queue_velocity('/MyRobot/left_Motor', 1.0)
+        self.bridge.queue_velocity('/MyRobot/right_Motor', 1.0)
+
     def stop(self):
-        """Called after simulation ends."""
-        logger.info("Stopping motors...")
-        self.sim.setJointTargetVelocity(self.left_motor, 0)
-        self.sim.setJointTargetVelocity(self.right_motor, 0)
+        """Called when simulation ends."""
+        logger.info("Simulation finished. Cleaning up...")
+        # Motors are stopped automatically by BaseApp
 
 def app():
-    """Entry point for main.py menu."""
-    sim = MyRobotSimulation()
-    sim.run()
+    """Entry point for main.py launcher."""
+    simulation = MyProjectSimulation()
+    simulation.run()
 
 if __name__ == "__main__":
     app()
 ```
 
-3. **Add to menu** - The file will automatically appear in the launcher menu.
+3. **Scene file setup** - Create your `.ttt` scene in CoppeliaSim:
+   - Add robots with names matching your code (e.g., 'MyRobot')
+   - Add motors as children: `/MyRobot/left_Motor`, `/MyRobot/right_Motor`
+   - Add sensors as children: `/MyRobot/Lidar`, etc.
+   - Save as `my_project.ttt` in the same folder as the `.py` file
+
+4. **Launch from menu** - Run `python main.py` and your project will appear in the menu
 
 ## Core Components
 
-### Communication Bridge Architecture
+### SimulationBridge (ZMQ Batch Dataflow)
 
-To ensure fast, reliable, and concise data exchange between Python and the simulator, the framework utilizes a highly optimized ZeroMQ (ZMQ) bridge architecture located in `core/bridge.py`:
+**Location:** `brainbyte/core/bridge.py`
 
-- **CoppeliaSim Thread Script:** Inside the CoppeliaSim environment, a dedicated threaded script actively listens for incoming requests.
-- **Variable Caching:** When initialized, this script receives a list of parameters and saves in cache exactly which variables and sensors it needs to monitor.
-- **CBOR2 Serialization:** Data is packaged and transmitted using the binary `cbor2` format, which is drastically lighter and faster to process than standard JSON.
-- **Path-based Keying:** When the simulator replies, the payload uses the actual simulation "path" of the variable (e.g., `/MyRobot/Lidar`) as the dictionary key. This allows the Python logic to instantly map incoming binary data to the correct virtual components without heavy parsing overhead.
+The bridge implements a high-performance synchronous communication pattern:
 
-### Simulation Lifecycle
+1. **ZeroMQ REQ/REP Pattern** (Port 23001)
+   - Python (REQ): Sends command batch and waits for response
+   - CoppeliaSim Lua (REP): Receives commands, steps physics, replies with sensor data
+   - This guarantees perfect synchronization between Python logic and simulator physics
 
-The framework implements a standardized lifecycle for all simulations:
-1. **Connection:** Connects to CoppeliaSim via ZMQ RemoteAPI.
-2. **Scene Loading:** Loads the specified `.ttt` file.
-3. **Setup:** Executes `setup()` to get object handles, sensors, and actuators.
-4. **Post-Start:** Executes `post_start()` for tests/diagnostics after the simulation starts.
-5. **Main Loop:** Executes `loop(t)` repeatedly while `t < sim_time`.
-6. **Stop:** Executes `stop()` for cleanup and safe shutdown.
+2. **Batch Dataflow Execution**
+   ```python
+   # Frame N: Queue commands (no network overhead)
+   bridge.queue_velocity('/Robot/left_motor', 2.0)
+   bridge.queue_velocity('/Robot/right_motor', 1.5)
+   bridge.queue_position('/Robot/arm_joint1', 0.5)
+   
+   # Send batch once, receive all data once (1 network RTT)
+   state = bridge.step()  # Binary CBOR2 transfer
+   
+   # Frame N+1: Read cached data (zero network overhead)
+   position = bridge.get_sensor_data('/Robot_pos')  # O(1) dict lookup
+   lidar_cloud = state['/Robot/lidar_bin']  # Already numpy.float32
+   ```
 
-### BaseApp Class
+3. **CBOR2 Binary Serialization**
+   - Dramatically faster than JSON for large data (LiDAR point clouds, camera frames)
+   - Automatic conversion: Binary → `numpy.float32` arrays
+   - Network payload typically 10-100x smaller than JSON equivalent
 
-Manages the complete simulation orchestration:
+### BaseApp Lifecycle
 
-| Method | Mandatory | When it runs | Description |
-|--------|-----------|--------------|-------------|
-| `setup()` | Yes | Once, before simulation starts | Get handles, initialize variables |
-| `loop(t)` | Yes | Every simulation step | Control logic and sensor reading |
-| `stop()` | No | After simulation ends | Safe motor shutdown, analysis, plotting |
-| `post_start()` | No | Right after simulation starts | Initial tests and diagnostics |
+**Location:** `brainbyte/core/base_app.py`
 
-**Useful Simulator Methods (`self.sim`):**
-- `getObject(path)` - Gets the handle of an object by its path.
-- `getObjectPosition(handle, ref_handle)` - Gets the object's position.
-- `getObjectOrientation(handle, ref_handle)` - Gets orientation (Euler angles).
-- `setJointTargetVelocity(handle, velocity)` - Sets joint velocity.
-- `getSimulationTimeStep()` - Gets the simulation delta time (dt).
+Manages complete simulation lifecycle:
 
-### Professional Logging
+```
+__init__()           → Connects to CoppeliaSim RemoteAPI (port 23000)
+                      Waits 10 seconds for simulator to open
+                      Initializes logging
 
-All modules use a standardized, emoji-free logging system for traceability. Logs are automatically saved in the `brainbyte/logs/` directory.
+run()               → Loads scene file
+                    → Starts simulation
+                    → Creates SimulationBridge
+                    → Calls setup()
+                    → Calls post_start()
+                    → Main loop: calls loop(t) and bridge.step()
+                    → Calls stop() on exit or Ctrl+C
+
+Properties:
+- self.sim            → RemoteAPIClient reference
+- self.bridge         → SimulationBridge instance  
+- self.dt             → Simulation time step
+- self.st             → Current simulation time
+```
+
+### BaseBot & Robots
+
+**Location:** `brainbyte/robots/base/base_bot.py` and `brainbyte/robots/movel/`
+
+Abstract base class for all robots:
 
 ```python
-from brainbyte.core.logging import setup_logger
-
-logger = setup_logger(__name__, '[APP]')
-
-logger.info("Starting...")    # [INFO] [APP] Starting...
-logger.error("Failed...")     # [ERROR] [APP] Failed...
+class BaseBot(ABC):
+    # Properties
+    @property
+    def pose(self):              # Returns [x, y, theta]
+    @pose.setter
+    def pose(self, new_pose):    # Teleports robot
+    
+    # Methods
+    def get_pose()               # Reads from cache
+    def add_sensor(name, obj)    # Attach sensor
+    def add_control(name, obj)   # Attach controller
 ```
 
-**Format**: `[LEVEL] [ORIGIN] [HH:MM:SS] message`
+**Available Robots:**
+- `TurtleBot` - Differential drive (v_max=0.31 m/s, wheelbase=0.287m)
+- `Robotino` - Omnidirectional 3-wheel platform
+- `PioneerBot` - Similar to TurtleBot
+- `Manta` - Hexapod robot
 
-### Visualization Functions
+### BaseSensor & Sensors
+
+**Location:** `brainbyte/sensors/base/base_sensor.py` and `brainbyte/sensors/`
+
+Abstract base class for all sensors:
 
 ```python
-from brainbyte.utils.plotting import Plot2D, Plot3D
-import numpy as np
-
-# 2D trajectory plot
-trajectory = np.array([[0, 0], [1, 1], [2, 0.5]])
-Plot2D(trajectory, 'X (m)', 'Y (m)', title='Robot Path')
-
-# 3D trajectory plot  
-trajectory_3d = np.array([[0, 0, 0], [1, 1, 0.5], [2, 0.5, 1.0]])
-Plot3D(trajectory_3d, 'X (m)', 'Y (m)', 'Z (m)', title='3D Robot Motion')
+class BaseSensor(ABC):
+    def get_monitor_paths() -> list   # Declares what to monitor
+    def get_bridge_data(suffix='')    # Reads from cache
+    def update()                      # Process sensor data
 ```
 
-Features include a green circle for the start point, a red star for the end point, automatic scaling, and grid generation.
+**Available Sensors:**
+- `LDS_02` - TurtleBot LIDAR (360°, ~30m range)
+- `HokuyoSensor` - Hokuyo LIDAR
 
-## Best Practices
+### Controllers
 
-### 1. Pre-calculate Loop-Invariant Values
-Calculate static values in `setup()` rather than in `loop()`.
-**Benefit**: Saves ~180 operations/second on 60 Hz loops.
+**Location:** `brainbyte/control/automatic.py`
 
-### 2. Robust Sensor Data Validation
-Always validate arrays returned by sensors before processing them to avoid scalar/empty format crashes (e.g., `if data is None or data.size == 0:`).
+- `PID_Controller` - Proportional-Integral-Derivative control
+- `On_Off_Controller` - Binary on/off control with hysteresis
+- `DifferentialController` - Navigation controller for differential robots
 
-### 3. Use `post_start()` for Initial Diagnostics
-Run initial tests or capture initial poses using `post_start()` instead of using unnecessary `_first_exec` flags inside your `loop()`.
+### Utilities
 
-### 4. Separate Real vs. Reference Trajectories
-Keep isolated lists for simulated coordinates and reference/desired coordinates to make plotting and error calculation easier.
+- **Logging** (`utils/logging.py`) - Professional logger with file output
+- **Plotting** (`utils/plotting.py`) - `Plot2D()` and `Plot3D()` for trajectory visualization  
+- **Math** (`utils/math.py`) - Vector operations, Gram-Schmidt orthogonalization
 
-## Running Tests
+## Architecture Highlights
 
-```bash
-# Run all tests
-pytest
+### Path-Based Object Addressing
 
-# Run with coverage
-pytest --cov=brainbyte
+All objects in CoppeliaSim are addressed using hierarchical paths:
+```
+/RobotName/base_link          → Robot root position/orientation
+/RobotName/left_motor         → Left wheel joint
+/RobotName/Lidar              → LIDAR sensor
+/RobotName/Lidar_bin          → LIDAR point cloud (binary)
 ```
 
-## Troubleshooting
+This allows:
+- Flexible scene organization
+- Automatic handle caching by Lua script
+- O(1) data lookup in Python cache
 
-- **"Program freezes at connection":** CoppeliaSim is not running. Start the application first.
-- **"Handle not found (-1 returned)":** Ensure the object path is correct (must start with `/`), the scene is loaded properly, and the name matches the `.ttt` file.
-- **"ZMQ Communication Error":** Enable RemoteAPI in CoppeliaSim via `Tools > Remote API server` (must be ON).
-- **"TypeError: len() of unsized object":** The sensor returned an invalid data format. Ensure proper data validation with `numpy` arrays.
+### Why Batch Dataflow?
 
-## Version History
+Traditional approach (1 request per command):
+```
+Python → CoppeliaSim (set velocity)     [10ms RTT]
+       ← CoppeliaSim (read position)    [10ms RTT]
+       → CoppeliaSim (set torque)       [10ms RTT]
+       ← CoppeliaSim (read sensor)      [10ms RTT]
+Total: 40ms per frame (25 FPS max) ❌
+```
 
-**v1.1.60** (Current)
-- Main package renamed to `brainbyte`.
-- Reorganized module structure: `core`, `utils`, `robots`, `gui`.
-- Moved logging directory to root (`brainbyte/logs/main.log` and `simulation.log`).
-- Grouped robot modules logically (`arms`, `base`, `humanoid`, `models`, `movel`).
-- Re-architected `projects/` directory into a Topic > Project > Files hierarchy. Main scripts must now match their parent project folder name.
-- Added beautiful CLI implementation in `gui/cli.py` with auxiliary functions in `auxF.py`.
-- Removed deprecated `scripts/` directory.
-- Included base template files inside `utils/basics/`.
+Batch approach (1 request, 1 reply):
+```
+Python → CoppeliaSim (all commands)     [1ms RTT]
+       ← CoppeliaSim (all sensor data)  [1ms RTT]
+Total: 2ms per frame (500 FPS possible) ✓
+```
 
-**v1.1.0**
-- Professional folder structure for distribution and packaging.
-- Completely revamped logging system.
-- Added `post_start()` lifecycle method.
-- Comprehensive documentation and unit test framework.
+### Why CBOR2?
 
-**v1.0.0**
-- Initial framework with BaseApp class.
-- Basic plotting functionality (Plot2D/Plot3D).
+- **Compact**: LiDAR 360×4 bytes → 1440 bytes CBOR vs 5KB+ JSON
+- **Fast**: Native binary format, no parsing overhead
+- **Native Arrays**: Transmitted as numpy arrays directly
+- **Type Preservation**: Floats, ints, binaries encoded efficiently
 
-## Contributing
+## Documentation
 
-1. Fork the repository
-2. Create a feature branch
-3. Follow the code style guidelines
-4. Add tests for new features
-5. Submit a pull request
+For more detailed information, see:
+- [API Reference](docs/API.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Contributing Guidelines](docs/CONTRIBUTING.md)
 
-See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for details.
+## License
 
-## License & Support
+MIT License
 
-- **License:** MIT License - see LICENSE file for details.
-- **Documentation:** Check the [docs/](docs/) folder.
-- **Support:** Report issues on GitHub or ask questions in discussions.
+## Contact
+
+For questions or issues, please open a GitHub issue or contact the maintainers.

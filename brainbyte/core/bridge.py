@@ -13,15 +13,15 @@ class SimulationBridge:
         self.latest_state = {}
 
     def queue_velocity(self, path: str, velocity: float):
-        """ Agendar comandos de velocidade para juntas de robôs"""
+        """Schedule velocity commands for robot joints."""
         self.command_buffer['velocities'][path] = velocity
 
     def queue_position(self, path: str, position: float):
-        """ Para braços robóticos ou servos """
+        """Schedule position targets for robotic arms or servos."""
         self.command_buffer['positions'][path] = position
 
     def get_sensor_data(self, path: str):
-        """ Classes podem chamar para puxar o cachê, ou buffer de um determinado sensor"""
+        """Retrieve cached sensor data for a specific path without network overhead."""
         return self.latest_state.get(path)
 
     def initialize(self, monitor_paths: list, actuator_paths: list, simulation) -> dict:
@@ -33,26 +33,26 @@ class SimulationBridge:
             raw_data = self.socket.recv()
             return cbor2.loads(raw_data)
         except zmq.error.Again:
-            raise ConnectionError("Timeout: O CoppeliaSim não respondeu ao INIT. A simulação está rodando?")
+            raise ConnectionError("Timeout: CoppeliaSim did not respond to INIT. Is the simulation running?")
         
     def step(self):
         payload = self.command_buffer.copy()
         payload["type"] = "STEP"
         
-        # Envia comandos
+        # Send commands
         self.socket.send(cbor2.dumps(payload))
         self.command_buffer = {'velocities': {}, 'positions': {}}
         
-        # Recebe a resposta 
+        # Receive response
         raw_bytes = self.socket.recv()
 
         raw_state = cbor2.loads(raw_bytes)
 
         self.latest_state = {}
         for key, value in raw_state.items():
-            # Processamento de dados binários do Coppelia (ex: LIDAR ou Visão)
+            # Process binary data from CoppeliaSim (e.g., LIDAR or Vision)
             if key.endswith("_bin"):
-                # O Coppelia usa float32 para o sim.packFloatTable
+                # CoppeliaSim uses float32 for sim.packFloatTable
                 self.latest_state[key] = np.frombuffer(value, dtype=np.float32)
             else:
                 self.latest_state[key] = value
@@ -61,9 +61,9 @@ class SimulationBridge:
 
     
     def queue_command(self, category: str, path: str, value):
-        """ 
-        Enfileira qualquer tipo de comando.
-        Ex categorias: 'velocities', 'positions', 'teleports'
+        """Queue any type of command.
+        
+        Example categories: 'velocities', 'positions', 'teleports'
         """
         if category not in self.command_buffer:
             self.command_buffer[category] = {}
@@ -71,7 +71,7 @@ class SimulationBridge:
         self.command_buffer[category][path] = value
         
     def close(self):
-        # Envia um comando de encerramento
+        """Close ZMQ socket and clean up resources."""
         try:
             self.socket.setsockopt(zmq.RCVTIMEO, 100)
             self.socket.send(cbor2.dumps({"type": "CLOSE"}))
