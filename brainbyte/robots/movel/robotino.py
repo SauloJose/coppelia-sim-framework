@@ -25,7 +25,7 @@ class Robotino(BaseBot):
         # LIMITES FÍSICOS
         self._v_max = 2.78                  # m/s (10 km/h)
         self._w_max = 2                     # rad/s (~115º/s)
-        self._wheel_max = 4.0 * 2*np.po     # rad/s (4 rps)
+        self._wheel_max = 4.0 * 2*np.pi     # rad/s (4 rps)
 
 
         # Cinemática
