@@ -5,8 +5,13 @@
 # ===========================================================================
 from brainbyte.utils.math import * 
  
-# Controlador PID 
+import numpy as np
+
 class PID_Controller:
+    """
+    Controlador PID Profissional com suporte a escalares e arrays (broadcasting)
+    e sistema de anti-windup (Clamping condicional).
+    """
     def __init__(self, var, kp, ki, kd, dt, set_point):
         """
         Inicializa o controlador PID.
@@ -14,125 +19,109 @@ class PID_Controller:
         Parâmetros:
         -----------
         var : float ou np.ndarray
-            Exemplo da variável a ser controlada, usado para definir as dimensões do controlador.
+            Exemplo da variável a ser controlada (define as dimensões do controlador).
         kp, ki, kd : float ou np.ndarray
-            Ganhos proporcional, integral e derivativo. Podem ser escalares ou ter o mesmo shape de `var`.
+            Ganhos proporcional, integral e derivativo. 
+        dt : float
+            Intervalo de tempo nominal da simulação.
         set_point : float ou np.ndarray
-            Valor de referência (setpoint) desejado para a variável controlada.
+            Valor de referência (setpoint) desejado.
         """
         # Determina as dimensões a partir do exemplo 'var'
         self.dim_control = np.asarray(var).shape if isinstance(var, np.ndarray) else ()
 
-        # Converte ganhos para formato compatível
+        # Converte ganhos para formato compatível (arrays ou escalares)
         self.kp = self._make_compatible(kp)
         self.ki = self._make_compatible(ki)
         self.kd = self._make_compatible(kd)
         self.set_point = self._make_compatible(set_point)
-
         self.dt = dt
-        # Estado interno
+        
+        # Inicia o estado interno
         self.reset()
 
     def _make_compatible(self, value):
-        """Garante que o valor tenha o formato esperado para broadcasting."""
+        """Garante que o valor tenha o formato esperado para broadcasting do Numpy."""
         if self.dim_control:
-            # Variável controlada é array
             if np.isscalar(value):
-                return np.full(self.dim_control, value)
+                return np.full(self.dim_control, value, dtype=float)
             else:
-                value = np.asarray(value)
-                # Verifica se o shape é compatível (permite broadcasting)
-                np.broadcast_to(value, self.dim_control)
-                return value
-        else:
-            # Variável controlada é escalar
-            return value
+                val_array = np.asarray(value, dtype=float)
+                # Verifica compatibilidade de broadcasting silenciosamente
+                return np.broadcast_to(val_array, self.dim_control)
+        return float(value)
         
     def set_setpoint(self, new_sp):
-        """
-        Define um novo valor de setpoint (referência).
-        """
+        """Define um novo valor de setpoint (referência)."""
         self.set_point = self._make_compatible(new_sp)
 
     def reset(self):
-        """
-        Reinicia o estado interno do controlador (erros acumulados, derivativo, tempo).
-        """
+        """Reinicia os estados internos do controlador (erros acumulados e passado)."""
         shape = self.dim_control
         self.error = np.zeros(shape) if shape else 0.0
         self.last_error = np.zeros(shape) if shape else 0.0
         self.cum_error = np.zeros(shape) if shape else 0.0
         self.output = np.zeros(shape) if shape else 0.0
 
-    def _calc_proportional(self, error):
-        """Termo proporcional."""
-        return self.kp * error
-
-    def _calc_integral(self, error, dt):
-        """Termo integral com anti-windup simples (limitação não incluída)."""
-        cum_error += error * dt
-        return cum_error, self.ki * cum_error
-
-    def _calc_derivative(self, error, dt):
-        """Termo derivativo (derivada do erro)."""
-        if dt > 0:
-            derivative = (error - self.last_error) / dt
-            self.last_error = error
-            return self.kd * derivative
-        else:
-            return np.zeros_like(error)
-        
-
-    def run(self, y, u_min=-1, u_max=1):
+    def run(self, y, u_min=-1.0, u_max=1.0):
         """
-        Executa uma iteração do controlador.
+        Executa uma iteração do controlador PID.
 
         Parâmetros:
         -----------
         y : float ou np.ndarray
-            Valor medido atual (mesmo formato da variável controlada).
-        dt : float
-            Intervalo de tempo desde a última iteração (passo da simulação).
+            Valor medido atual.
+        u_min, u_max : float ou np.ndarray
+            Limites mínimo e máximo de saturação do sinal de controle.
 
         Retorna:
         --------
         u : float ou np.ndarray
-            Sinal de controle.
+            Sinal de controle saturado.
         """
-        dt = self.dt
         y = self._make_compatible(y)
         u_min = self._make_compatible(u_min)
         u_max = self._make_compatible(u_max)
 
-        # Erro atual
+        # 1. Cálculo do erro atual
         self.error = self.set_point - y
 
-        # Termo proporcional
-        P = self._calc_proportional(self.error)
+        # 2. Termo Proporcional
+        P = self.kp * self.error
 
-        #Termo derivativo
-        D = self._calc_derivative(self.error, dt)
+        # 3. Termo Derivativo
+        if self.dt > 0:
+            derivative = (self.error - self.last_error) / self.dt
+        else:
+            derivative = np.zeros(self.dim_control) if self.dim_control else 0.0
+        D = self.kd * derivative
 
-        # Termo integrativo
-        new_cum, I = self._calc_integral(self.error, dt)
+        # 4. Termo Integral (Integração provisória para avaliar Clamping)
+        delta_integral = self.error * self.dt
+        provisional_cum_error = self.cum_error + delta_integral
+        I = self.ki * provisional_cum_error
 
-        u_unsat = P+I+D
+        # 5. Cálculo do controle não saturado
+        u_unsat = P + I + D
 
-        # Lógica de Clamping compatível com Escalares e Arrays
-        # Se (Saturado em cima E erro positivo) OU (Saturado em baixo E erro negativo)
+        # 6. Lógica de Clamping (Anti-Windup)
+        # Verifica se estourou os limites E o erro atual está empurrando mais ainda na direção da saturação
         is_saturated_high = (u_unsat > u_max) & (self.error > 0)
         is_saturated_low  = (u_unsat < u_min) & (self.error < 0)
         dont_integrate = is_saturated_high | is_saturated_low
 
+        # 7. Atualização dos Estados (Apenas se não cair no clamping)
         if isinstance(self.error, np.ndarray):
-            # Se for array, usamos np.where para decidir junta por junta
-            self.cum_error = np.where(dont_integrate, self.cum_error, new_cum)
+            self.cum_error = np.where(dont_integrate, self.cum_error, provisional_cum_error)
         else:
-            # Se for escalar, usamos o if comum
             if not dont_integrate:
-                self.cum_error = new_cum
+                self.cum_error = provisional_cum_error
 
+        self.last_error = self.error
+
+        # 8. Saída final saturada
         self.output = np.clip(u_unsat, u_min, u_max)
+        
         return self.output
 
 class On_Off_Controller:
@@ -352,3 +341,119 @@ class DifferentialController:
         self.w_cmd += dw
 
         return self.v_cmd, self.w_cmd
+    
+
+class OmnidirectionalController:
+    def __init__(self, pos_init: np.ndarray,
+                 set_point: np.ndarray,
+                 k_x: float,
+                 k_y: float,
+                 k_theta: float,
+                 dt: float = 0.05):
+        
+        # Ganhos do controlador (agora Cartesianos, não mais polares)
+        self.k_x = k_x
+        self.k_y = k_y
+        self.k_theta = k_theta
+
+        # Estados
+        self.set_point = set_point    
+        self.current_state = pos_init 
+
+        # Comandos internos (agora temos vx e vy locais)
+        self.vx_cmd = 0.0
+        self.vy_cmd = 0.0
+        self.w_cmd = 0.0 
+
+        # Limites (ajustados com o alpha_max corrigido)
+        self.v_max = 1.0
+        self.w_max = 6.0
+        self.a_max = 3.0
+        self.alpha_max = 6.0
+        
+    def set_SP(self, set_point):
+        self.set_point = set_point
+
+    @staticmethod
+    @njit
+    def _calc_errors(actual, set_point):
+        """
+        Cálculo puramente Cartesiano (Holonômico).
+        Retorna os erros nos eixos globais e o erro de orientação.
+        """
+        dx = set_point[0] - actual[0]
+        dy = set_point[1] - actual[1]
+        
+        # dtheta precisa do normalize_angle para não dar giros de 360 à toa
+        # dtheta = normalize_angle(set_point[2] - actual[2])
+        dtheta = set_point[2] - actual[2] # Simplificado, aplique sua função aqui
+        
+        return dx, dy, dtheta
+
+    def set_parameters(self, k_x, k_y, k_theta):
+        self.k_x = k_x
+        self.k_y = k_y
+        self.k_theta = k_theta
+    
+    def set_max_values(self, v_max=1.0, a_max=4.0, w_max=10.0, alpha_max=4.0):
+        self.v_max = v_max
+        self.a_max = a_max 
+        self.w_max = w_max 
+        self.alpha_max = alpha_max 
+
+    def get_control(self, actual_point: np.ndarray, dt: float = 0.05):
+        actual_point = np.asarray(actual_point)
+        dx, dy, dtheta = self._calc_errors(actual_point, self.set_point)
+        
+        # Distância Euclidiana apenas para critério de parada
+        rho = np.sqrt(dx**2 + dy**2)
+        
+        rho_tol = 0.05
+        theta_tol = 0.05
+
+        # 1. Velocidades Globais baseadas no erro (Controle Proporcional)
+        vx_global_target = self.k_x * dx
+        vy_global_target = self.k_y * dy
+        w_target = self.k_theta * dtheta
+
+        # 2. Rotação do Mundo para o Robô (Transformação de Referencial)
+        # É aqui que o comando vira algo que o robô entende no próprio chassi
+        theta = actual_point[2]
+        c = np.cos(theta)
+        s = np.sin(theta)
+
+        vx_local_target = vx_global_target * c + vy_global_target * s
+        vy_local_target = -vx_global_target * s + vy_global_target * c
+        
+        # 3. Tratamento de Chegada
+        if rho < rho_tol:
+            vx_local_target = 0.0
+            vy_local_target = 0.0
+            if abs(dtheta) < theta_tol:
+                w_target = 0.0
+                self.vx_cmd, self.vy_cmd, self.w_cmd = 0.0, 0.0, 0.0
+                return np.array([0.0, 0.0]), 0.0
+
+        # 4. Saturação de Velocidade Linear (Vetor 2D)
+        v_vector_target = np.array([vx_local_target, vy_local_target])
+        v_norm = np.linalg.norm(v_vector_target)
+        if v_norm > self.v_max:
+            v_vector_target = v_vector_target * (self.v_max / v_norm)
+        
+        w_target = np.clip(w_target, -self.w_max, self.w_max)
+
+        # 5. SLEW RATE (Sua lógica de Aceleração mantida para X, Y e Theta)
+        max_dv = self.a_max * dt
+        max_dw = self.alpha_max * dt 
+
+        dvx = np.clip(v_vector_target[0] - self.vx_cmd, -max_dv, max_dv)
+        dvy = np.clip(v_vector_target[1] - self.vy_cmd, -max_dv, max_dv)
+        dw = np.clip(w_target - self.w_cmd, -max_dw, max_dw)
+
+        # Atualiza o estado interno
+        self.vx_cmd += dvx
+        self.vy_cmd += dvy
+        self.w_cmd += dw
+
+        # Retorna o vetor de velocidade linear e o escalar angular
+        return np.array([self.vx_cmd, self.vy_cmd]), self.w_cmd

@@ -15,14 +15,14 @@ import traceback
 - stop(): Rotina de encerramento para salvar logs, gráficos ou parar motores.
 """
 
-class {name_app}(BaseApp):
+class BUG_Traj(BaseApp):
     """
-    Classe principal da simulação {name_app}.
+    Classe principal da simulação BUG_Traj.
     Gerencia o ciclo de vida da aplicação, integrando a lógica de controle com a cena do CoppeliaSim.
     """
     def __init__(self):
         """Inicializa os parâmetros base da aplicação, definindo a cena e o tempo total de simulação."""
-        super().__init__(scene_file="{name_scene}.ttt", sim_name="{name_app}", sim_time={simulation_time})
+        super().__init__(scene_file="cena.ttt", sim_name="BUG_Traj", sim_time=120)
         
         # Uma lista para guardar quantos robôs o usuário criar
         self.robots = [] 
@@ -54,7 +54,7 @@ class {name_app}(BaseApp):
         except Exception as e:
             self.logger.error(f"Error detected in post_start()!\nTraceback:\n{traceback.format_exc()}")
 
-    def loop(self, t,actual_state=None):
+    def loop(self, t, actual_state=None):
         """
         Núcleo de execução contínua. 
         Implemente aqui a lógica de controle principal, leitura de sensores e atualização de atuadores.
@@ -94,5 +94,5 @@ def app():
     Ponto de entrada principal da simulação. 
     Instancia a classe e inicia o ciclo de vida (run) para integração com o gerenciador BRAINBYTE.
     """
-    aplicacao = {name_app}()
+    aplicacao = BUG_Traj()
     aplicacao.run()

@@ -108,6 +108,10 @@ class LaserVisualizationExample(BaseApp):
                          sim_time=60.0)
         self._first_exec = True  # Flag to draw laser plot on first loop
 
+        self.DIST_SEGURA = 0.3
+        self.VEL_LINEAR = 0.8
+        self.ANGULO_GIRO = np.deg2rad(45)
+
     def setup(self):
         """Configure robot resources before simulation starts.
 
@@ -162,68 +166,68 @@ class LaserVisualizationExample(BaseApp):
         self.logger.info(f'Initial robot position: x={pos[0]:.2f}, y={pos[1]:.2f}')
 
     def loop(self, t):
-        """Main control loop executed at each simulation step.
-
-        Args:
-            t: Current simulation time (seconds)
-        
-        This method:
-        1. Reads laser data from Hokuyo sensor
-        2. Visualizes laser data on first iteration
-        3. Extracts distance readings from front/left/right directions
-        4. Implements reactive obstacle avoidance
-        5. Commands differential drive velocities
-        """
-        # Read laser data
+        """Executado a cada passo da simulação com lógica de evasão."""
         try:
-            laser_data = np.asarray(self.hokuyo_sensor.update())
+            # 1. Puxar dados do cache da Bridge (Zero-Lag)
+            # O .update() retorna o que a Bridge capturou no último sim.step()
+            raw_data = self.hokuyo_sensor.update()
             
-            # Plot laser data on first execution
-            if self._first_exec is True:
-                draw_laser_data(laser_data, 5, True)
-                self._first_exec = False 
-        except Exception:
-            self.logger.exception("Error reading sensor data in loop.")
-            return
+            if raw_data is None:
+                # Se a Bridge ainda não recebeu nada do Coppelia, saímos cedo
+                return
 
-        # If camera hasn't rendered yet (first few steps), just wait
-        if len(laser_data) == 0: 
-            return
+            # Converter para Numpy para processamento matemático
+            laser_data = np.asarray(raw_data)
 
-        # Calculate indices for front/left/right based on array size (typically 684 points)
-        dist_frente = laser_data[self.idx_frente, 1]
-        dist_esq = laser_data[self.idx_esq, 1]
-        dist_dir = laser_data[self.idx_dir, 1]
+            # 2. VALIDAÇÃO CRÍTICA (Evita o IndexError)
+            if laser_data.ndim != 2 or laser_data.shape[0] == 0:
+                self.logger.warning(f"LIDAR vazio ou malformado. Shape recebido: {laser_data.shape}")
+                return # Interrompe a execução deste loop específico
 
-        # Log sensor readings (DEBUG level to avoid console spam in production)
-        #self.logger.debug(f"[{t:.2f}s] Sensor -> Left: {dist_esq:.2f}m | Front: {dist_frente:.2f}m | Right: {dist_dir:.2f}m")
+            # 3. DIVISÃO EM SETORES (ZONAS)
+            n_points = laser_data.shape[0]
+            terco = n_points//3 
 
-        # === OBSTACLE AVOIDANCE LOGIC ===
-        v = 0.0
-        w = 0.0
-        
-        # 0.6m considered as danger distance
-        if dist_frente > 0.6:
-            # Path is clear! Move forward
-            v = 0.4
-            w = 0.0
-        else:
-            # Obstacle ahead! Check which side has more space
-            v = -1  # Reverse
-            if dist_esq > dist_dir:
-                # Left is clearer, turn left (positive)
-                w = np.deg2rad(40)
+            # 4. Extração de distâncias (Coluna 0: Ângulo, Coluna 1: Distância)
+            setor_dir = laser_data[0 : terco, 1]
+            setor_frente = laser_data[terco : 2 * terco, 1]
+            setor_esq = laser_data[2 * terco :, 1]
+
+            # Extrair o menor valor de cada setor, para ter entendimento
+            min_dir = np.min(setor_dir)
+            min_frente = np.min(setor_frente)
+            min_esq = np.min(setor_esq)
+            
+            self.logger.debug(f"Zonas Mínimas -> Esq: {min_esq:.2f}m | Frente: {min_frente:.2f}m | Dir: {min_dir:.2f}m")
+
+            # 5. LÓGICA DE DECISÃO PROPORCIONAL
+            margem_lateral = 1.0 # Distância a partir da qual o robô começa a se afastar das paredes
+
+            if min_frente > self.DIST_SEGURA:
+                v = self.VEL_LINEAR
+
+                # Desvio Proporcional suave
+                if min_esq < margem_lateral or min_dir < margem_lateral:
+                    w = (min_esq - min_dir) * 0.8
+                else:
+                    w = 0.2 
             else:
-                # Right is clearer, turn right (negative)
-                w = np.deg2rad(-40)
+                # Obstáculo iminente à frente: Parar ou Recuar e girar forte
+                self.logger.info("Obstáculo frontal! Manobra evasiva...")
+                v = -0.5 
+                
+                # Gira no próprio eixo em direção ao lado mais livre
+                if min_esq > min_dir:
+                    w = self.ANGULO_GIRO * 0.5 # Gira esquerda
+                else:
+                    w = -self.ANGULO_GIRO * 0.5 # Gira direita
 
-        # Aplica velocidades usando a classe PioneerBot (ela cuida da matemática!)
-        try:
-            self.robot.set_wheel_velocity(v, w)
-            wl, wr = self.robot.wheel_velocities
-            #self.logger.debug(f"Velocity command: wl={wl:.3f}, wr={wr:.3f}")
-        except Exception:
-            self.logger.exception("Failed to apply velocities to motors.")
+            # 6. ENVIAR COMANDOS (Enfileira no buffer da Bridge)
+            self.robot.set_wheel_velocity(linear_vel=v, angular_vel=w)
+
+        except Exception as e:
+            self.logger.error(f"Falha catastrófica no loop de controle: {e}")
+            # Opcional: self.stop_simulation() se o erro for persistente
 
     def stop(self):
         """Executed after the simulation finishes to ensure safe shutdown."""

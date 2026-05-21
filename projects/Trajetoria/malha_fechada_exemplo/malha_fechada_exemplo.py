@@ -48,9 +48,6 @@ class LocomocaoMF(BaseApp):
         # Limites dinâmicos da simulação
         self.v_max = 5     # Velocidade linear máxima (m/s)
         self.w_max = 2.0   # Velocidade angular máxima (rad/s)
-
-        # Passo da simulação
-        self.dt = self.d_time()
         
         # Variáveis de controle PID
         self.pid_v = PID_Controller(

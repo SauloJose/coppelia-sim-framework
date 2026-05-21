@@ -144,8 +144,7 @@ class BaseApp:
             self.setup()
             self.post_start()
             
-            current_state = self.bridge.step()
-            t = current_state.get('sim_time', 0.0)
+            t = self.simu_time()
 
             if not HAS_KEYBOARD:
                 self.logger.warning("Keyboard monitoring disabled (requires sudo on Linux). Use Ctrl+C to stop.")
@@ -178,7 +177,7 @@ class BaseApp:
                     self.bridge.close()
                 self.sim.stopSimulation()
             except:
-                return 
+                return
     
     def d_time(self):
         return self.sim.getSimulationTimeStep()

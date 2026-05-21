@@ -41,8 +41,9 @@ class SimulationBridge:
         
         # Send commands
         self.socket.send(cbor2.dumps(payload))
-        self.command_buffer = {'velocities': {}, 'positions': {}}
         
+        self.command_buffer = {key: {} for key in self.command_buffer.keys()}
+
         # Receive response
         raw_bytes = self.socket.recv()
 

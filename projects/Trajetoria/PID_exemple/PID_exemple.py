@@ -28,8 +28,6 @@ class PIDSimu(BaseApp):
         self.bridge.initialize(monitor_paths, actuator_paths,self.sim)
         self.logger.info("Handshake com o CoppeliaSim concluído.")
 
-        self.dt = self.d_time()
-
         # Definido para teste um controlador onoff
         self.OnOff = On_Off_Controller(var=1, 
                                        set_point=0, 
