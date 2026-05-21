@@ -9,7 +9,30 @@ from brainbyte.gui.auxF import *
 from brainbyte.utils.logging import *  # Certifique-se de que este módulo existe
 from brainbyte.core.paths import *
 import traceback
-import msvcrt
+try:
+    import msvcrt
+except ImportError:
+    import sys
+    import tty
+    import termios
+
+    # Criando um substituto para a função mais comum do msvcrt (getch)n
+    class _Getch:
+        def __call__(self):
+            fd = sys.stdin.fileno()
+            old_settings = termios.tcgetattr(fd)
+            try:
+                tty.setraw(sys.stdin.fileno())
+                ch = sys.stdin.read(1)
+            finally:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            return ch
+
+    # Define o msvcrt falso para o Linux com a função getch
+    class MockMsvcrt:
+        getch = _Getch()
+
+    msvcrt = MockMsvcrt()
 
 import platform
 import subprocess
