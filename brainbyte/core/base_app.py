@@ -102,12 +102,11 @@ class BaseApp:
         try:
             # Load scene
             if self.scene_file:
-                # Find the absolute path of the script that called BaseApp (e.g., your_app.py)
+                # Find the absolute path of the script that called BaseApp
                 try:
                     child_module = sys.modules[self.__class__.__module__]
                     base_dir = os.path.dirname(os.path.abspath(child_module.__file__))
                 except (KeyError, AttributeError):
-                    # Safety fallback
                     base_dir = os.getcwd()
 
                 scene_path = os.path.join(base_dir, self.scene_file)
@@ -115,19 +114,18 @@ class BaseApp:
                 if not os.path.exists(scene_path):
                     raise FileNotFoundError(f"Scene not found: {scene_path}")
                 self.logger.info(f"Loading scene: {self.scene_file}...")
-                self.sim.loadScene(scene_path) # load the Scene in the Coppelia
+                self.sim.loadScene(scene_path) 
             
-
             self.logger.info("Starting simulation...")
-            self.sim.startSimulation() #Initialize the simulation
+            self.sim.startSimulation() 
  
             time.sleep(0.5)
             
             for _ in range(3):
-                self.sim.step()           # make te Coppelia advance one step, callin the system_sensing()
+                self.sim.step()
                 time.sleep(0.05)
             
-            # NECESSARY: Make the bridge to communicate with the Coppelia via ZeroMQ using cbor2
+            # NECESSARY: Make the bridge to communicate with the Coppelia via ZeroMQ
             self.bridge = SimulationBridge()
 
             # NECESSARY: Setup my simulation
@@ -136,27 +134,29 @@ class BaseApp:
             # NECESSARY: post_start logic to init my configurations
             self.post_start()
             
-            current_state = self.bridge.step()
-            t = current_state.get('sim_time', 0.0)
+            t = self.simu_time()
 
-            # Main loop of the simulation. Here we can add the logic from loop and the communication with the bridge.
-            while t  < self.sim_time:
+            # Main loop of the simulation
+            while t < self.sim_time:
+                current_state = self.bridge.step()
+
+                t = current_state.get('sim_time', t + self.dt)
+                
                 try:
                     if keyboard.is_pressed('x'):
                         self.logger.warning(f"Simulation interrupted by user at t={t:.2f}s")
                         break
-                except ImportError as e:
-                    # Catch errors if the user lacks the module or root privileges
-                    self.logger.error("Error detected on Keyboard input (request sudo in Linux/Mac). Press Ctrl+C to stop.")
+                except (ImportError, PermissionError, OSError):
+                    # Ampliado para capturar erros de permissão de root no Linux
+                    self.logger.error("Error on Keyboard input (request sudo in Linux/Mac). Press Ctrl+C to stop.")
                 
-                # IMPORTANT: Here is the logic of my simulation! The child-class have to make this.
-                self.loop(self.simu_time())
+                # Passamos o tempo e opcionalmente o estado atual para o filho
+                self.loop(t=t, actual_state=current_state)
 
-                # IMPORTANT: Here is a very useful thing. Using self.bridge.step() we call the ZeroMQ API to communicate the 
-                # state of the simulation, so, this is VERY IMPORTANT AND NECESSARY to mantain here!
-                self.bridge.step()
+                # CORREÇÃO CRÍTICA: Atualiza a variável current_state com o novo step
+                current_state = self.bridge.step()
 
-                # att the time
+                # Atualiza o tempo para a verificação do while
                 t = current_state.get('sim_time', t + 0.05)
 
         except KeyboardInterrupt:
@@ -169,11 +169,11 @@ class BaseApp:
             self.logger.info("Stopping simulation in finally...")
             try:
                 self.stop()
-                if hasattr(self, 'bridge'):
-                    self.bridge.close() # stop de bridge connection
+                if hasattr(self, 'bridge'):# stop de bridge connection
+                    self.bridge.close()
                 self.sim.stopSimulation()
             except:
-                return 
+                return
     
     # Fetch standard information 
     def d_time(self):

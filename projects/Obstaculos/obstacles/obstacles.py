@@ -157,37 +157,47 @@ class ObstacleAvoidanceTester(BaseApp):
             laser_data = np.asarray(raw_data)
 
             # 2. VALIDAÇÃO CRÍTICA (Evita o IndexError)
-            # Verificamos se o array é 2D [pontos, 2] e se tem dados
             if laser_data.ndim != 2 or laser_data.shape[0] == 0:
                 self.logger.warning(f"LIDAR vazio ou malformado. Shape recebido: {laser_data.shape}")
                 return # Interrompe a execução deste loop específico
 
-            # 3. Atualizar índices baseados no tamanho real do scan
-            # (Alguns sensores mudam a resolução dinamicamente)
+            # 3. DIVISÃO EM SETORES (ZONAS)
             n_points = laser_data.shape[0]
-            idx_frente = n_points // 2
-            idx_esq = (3 * n_points) // 4
-            idx_dir = n_points // 4
+            terco = n_points//3 
 
             # 4. Extração de distâncias (Coluna 0: Ângulo, Coluna 1: Distância)
-            dist_frente = laser_data[idx_frente, 1]
-            dist_esq = laser_data[idx_esq, 1]
-            dist_dir = laser_data[idx_dir, 1]
+            setor_dir = laser_data[0 : terco, 1]
+            setor_frente = laser_data[terco : 2 * terco, 1]
+            setor_esq = laser_data[2 * terco :, 1]
 
-            # Log de depuração para monitorar as leituras no terminal
-            self.logger.debug(f"Distâncias -> Esq: {dist_esq:.2f}m | Frente: {dist_frente:.2f}m | Dir: {dist_dir:.2f}m")
+            # Extrair o menor valor de cada setor, para ter entendimento
+            min_dir = np.min(setor_dir)
+            min_frente = np.min(setor_frente)
+            min_esq = np.min(setor_esq)
+            
+            self.logger.debug(f"Zonas Mínimas -> Esq: {min_esq:.2f}m | Frente: {min_frente:.2f}m | Dir: {min_dir:.2f}m")
 
-            # 5. LÓGICA DE DECISÃO (Evasão de Obstáculos)
-            if dist_frente > self.DIST_SEGURA:
-                # Caminho livre à frente
+            # 5. LÓGICA DE DECISÃO PROPORCIONAL
+            margem_lateral = 1.0 # Distância a partir da qual o robô começa a se afastar das paredes
+
+            if min_frente > self.DIST_SEGURA:
                 v = self.VEL_LINEAR
-                w = 0.0
+
+                # Desvio Proporcional suave
+                if min_esq < margem_lateral or min_dir < margem_lateral:
+                    w = (min_esq - min_dir) * 0.8
+                else:
+                    w = 0.0 
             else:
-                # Obstáculo detectado: decide para onde girar
-                self.logger.info("Obstáculo detectado! Iniciando manobra...")
-                v = self.VEL_RECUA
-                # Se tiver mais espaço na esquerda, gira para a esquerda, senão direita
-                w = self.ANGULO_GIRO if dist_esq > dist_dir else -self.ANGULO_GIRO
+                # Obstáculo iminente à frente: Parar ou Recuar e girar forte
+                self.logger.info("Obstáculo frontal! Manobra evasiva...")
+                v = 0.0 # Zera a velocidade linear para não bater (ou use self.VEL_RECUA se precisar dar ré)
+                
+                # Gira no próprio eixo em direção ao lado mais livre
+                if min_esq > min_dir:
+                    w = self.ANGULO_GIRO * 0.5 # Gira esquerda
+                else:
+                    w = -self.ANGULO_GIRO * 0.5 # Gira direita
 
             # 6. ENVIAR COMANDOS (Enfileira no buffer da Bridge)
             self.robot.set_wheel_velocity(linear_vel=v, angular_vel=w)
@@ -195,6 +205,8 @@ class ObstacleAvoidanceTester(BaseApp):
         except Exception as e:
             self.logger.error(f"Falha catastrófica no loop de controle: {e}")
             # Opcional: self.stop_simulation() se o erro for persistente
+
+
     def stop(self):
         """Executado após a simulação terminar - parada segura."""
         self.logger.info("Parando motores e finalizando simulação...")

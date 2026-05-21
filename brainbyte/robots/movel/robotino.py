@@ -126,8 +126,8 @@ class Robotino(BaseBot):
         omega = np.clip(omega, -self._w_max, self._w_max)
 
         # Multiplicação de matrizes correta usando '@' (ou .dot())
-        V_chassi = np.array([vx, vy, omega])
-        wheels_cmd = self.H @ V_chassi
+        v_chassi = np.array([vx, vy, omega])
+        wheel_cmds = self.H @ v_chassi
 
         # Limitação das rodas
         max_w = np.max(np.abs(wheel_cmds))
