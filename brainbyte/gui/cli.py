@@ -450,6 +450,7 @@ class brainGUI:
             sys.stdout.write('\033[?25h')
             sys.stdout.flush()
 
+    # ---------- Funcionalidades originais ----------
     def _exibir_texto_com_bot(self, titulo, conteudo): #Padrão de desenho na tela!
         """Exibe uma tela informativa com a bot e aguarda tecla."""
         os.system('cls' if os.name == 'nt' else 'clear')
@@ -465,7 +466,6 @@ class brainGUI:
 
         sys.stdout.write('\033[?25h')
         sys.stdout.flush()
-
 
     def _flush_input(self):
         """Esvazia o buffer de entrada, descartando teclas pendentes."""
@@ -490,7 +490,7 @@ class brainGUI:
                 pass
             finally:
                 termios.tcsetattr(fd, termios.TCSADRAIN, old)
-    # ---------- Funcionalidades originais ----------
+
     def _list_topics(self):
         """Lista as subpastas em 'projects/' que servem como categorias/tópicos."""
         target_dir = Path.cwd() / "projects"
@@ -607,20 +607,34 @@ class brainGUI:
             self.banner()
 
             if hasattr(module, 'app'):
-                BOT_print(f"O projeto '{selected_project}' ({selected_topic}) foi iniciado. Para pausar ou cancelar clique em 'ctrl+c' ou 'x'.", width=45)
-                try:
-                    module.app()
-                except Exception as e:
+                BOT_print(f"O projeto '{selected_project}' ({selected_topic}) foi iniciado. "
+                        "Aguardando até 10 segundos pela resposta...", width=50)
+
+                status, info = self._run_module_app(module, timeout=10)
+
+                if status == 'timeout':
+                    os.system('cls' if os.name == 'nt' else 'clear')
+                    self.banner()
+                    BOT_print("O projeto não respondeu em 10 segundos. "
+                            "Verifique se o CoppeliaSim está rodando ou se o script trava ao conectar. "
+                            "Retornando ao menu...", width=55)
+                    get_key()
+                elif status == 'exception':
+                    e, tb = info
                     print("\n" + "="*50)
                     print("ERRO FATAL NO PROJETO:")
-                    traceback.print_exc()
+                    print(tb)
                     print("="*50 + "\n")
                     input("Pressione ENTER para voltar ao menu...")
+                else:
+                    # Sucesso: projeto terminou normalmente
+                    os.system('cls' if os.name == 'nt' else 'clear')
+                    self.banner()
+                    BOT_print("Projeto finalizado.", width=40)
+                    get_key()
             else:
                 BOT_print(f"Erro: O arquivo '{selected_project}.py' não contém a função 'app()'.", width=45)
                 get_key()
-
-            get_key()
                 
         except Exception as e:
             BOT_print(f"Erro ao carregar módulo: {type(e).__name__}: {e}", width=50)
@@ -825,6 +839,47 @@ class brainGUI:
             sys.stdout.write('\033[?25l')
             sys.stdout.flush()
 
+    def _run_module_app(self, module, timeout=10):
+        """
+        Executa module.app() em uma thread separada, com timeout.
+        Retorna ('success', None) se terminou sem erros.
+        Retorna ('timeout', None) se excedeu o tempo.
+        Retorna ('exception', (exceção, traceback)) se houve erro.
+        """
+        import threading
+        exception_info = None
+        completed = threading.Event()
+
+        def target():
+            nonlocal exception_info
+            try:
+                module.app()
+            except Exception as e:
+                exception_info = (e, traceback.format_exc())
+            finally:
+                completed.set()
+
+        thread = threading.Thread(target=target)
+        thread.daemon = True
+        thread.start()
+        finished = completed.wait(timeout=timeout)
+
+        if not finished:
+            return 'timeout', None
+        if exception_info:
+            return 'exception', exception_info
+        return 'success', None
+
+    def _is_coppeliasim_running(self, host='127.0.0.1', port=23000, timeout=0.5):
+        """Retorna True se o CoppeliaSim estiver ouvindo na porta padrão."""
+        import socket
+        try:
+            s = socket.create_connection((host, port), timeout=timeout)
+            s.close()
+            return True
+        except:
+            return False
+    
     def _copy_existing_project(self, nome_topico_destino):
         """Copia um projeto existente para dentro do tópico escolhido, com novo nome."""
 
