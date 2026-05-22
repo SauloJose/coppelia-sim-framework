@@ -87,8 +87,13 @@ def BOT_say(message, width=50):
     box_lines = []
     box_lines.append("   ╭" + "─" * (max_len + 2) + "╮")
     
-    # Define a linha do meio para colocar a setinha apontando para o robô
-    pointer_idx = len(lines) // 2 
+    # Encontra a linha não-vazia mais próxima do centro para colocar a seta
+    non_empty_indices = [i for i, line in enumerate(lines) if line.strip()]
+    if non_empty_indices:
+        center = len(lines) // 2
+        pointer_idx = min(non_empty_indices, key=lambda i: abs(i - center))
+    else:
+        pointer_idx = 0
     
     for i, line in enumerate(lines):
         content = line.ljust(max_len)

@@ -1,0 +1,1 @@
+﻿Controle de braços robóticos e manipuladores para movimentação e manipulação de objetos.

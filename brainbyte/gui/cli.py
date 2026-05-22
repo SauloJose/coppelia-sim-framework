@@ -4,6 +4,7 @@ from pathlib import Path
 import shutil
 import importlib
 import textwrap
+import json
 from brainbyte.gui.auxF import * 
 
 from brainbyte.utils.logging import *  # Certifique-se de que este módulo existe
@@ -51,6 +52,56 @@ class brainGUI:
             'ros_connection': False,
             'udp_connection': False 
         }
+        # Carrega o arquivo de configuração de projetos
+        self.pconfig_path = Path.cwd() / "brainbyte" / "utils" / "pconfig.json"
+        self.pconfig = self._load_pconfig()
+
+    def _load_description(self, description_path):
+        """Carrega a descrição de um arquivo description.txt."""
+        try:
+            if Path(description_path).exists():
+                with open(description_path, 'r', encoding='utf-8') as f:
+                    content = f.read().strip()
+                    if content:
+                        return content
+        except Exception as e:
+            self.logger.warning(f"Erro ao carregar descrição {description_path}: {e}")
+        return ""
+
+    def _get_topic_description(self, topic_name):
+        """Retorna a descrição de um tópico do arquivo description.txt na pasta do tópico."""
+        desc_path = Path.cwd() / "projects" / topic_name / "description.txt"
+        return self._load_description(desc_path)
+
+    def _get_project_description(self, topic_name, project_name):
+        """Retorna a descrição de um projeto do arquivo description.txt na pasta do projeto."""
+        desc_path = Path.cwd() / "projects" / topic_name / project_name / "description.txt"
+        return self._load_description(desc_path)
+
+    def _save_topic_description(self, topic_name, description):
+        """Salva a descrição de um tópico no arquivo description.txt."""
+        try:
+            desc_path = Path.cwd() / "projects" / topic_name / "description.txt"
+            desc_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(desc_path, 'w', encoding='utf-8') as f:
+                f.write(description)
+        except Exception as e:
+            self.logger.error(f"Erro ao salvar descrição de tópico: {e}")
+
+    def _save_project_description(self, topic_name, project_name, description):
+        """Salva a descrição de um projeto no arquivo description.txt."""
+        try:
+            desc_path = Path.cwd() / "projects" / topic_name / project_name / "description.txt"
+            desc_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(desc_path, 'w', encoding='utf-8') as f:
+                f.write(description)
+        except Exception as e:
+            self.logger.error(f"Erro ao salvar descrição de projeto: {e}")
+
+    def _load_pconfig(self):
+        """Mantém compatibilidade - carrega arquivo vazio."""
+        return {"topicos": {}, "projetos": {}}
+
 
     @staticmethod
     def banner():
@@ -152,6 +203,104 @@ class brainGUI:
             sys.stdout.write('\033[?25h')
             sys.stdout.flush()
     
+    def _menu_navegavel_com_descricao(self, titulo, opcoes, get_description_func, msg_bot=None, subtitulo=None):
+        """Menu navegável que exibe descrição dinâmica na fala do bot conforme navega."""
+        os.system('cls' if os.name == 'nt' else 'clear')
+        self.banner()
+        
+        term_width = shutil.get_terminal_size().columns
+        menu_width = min(70, term_width - 4)
+        selected = 0
+        
+        sys.stdout.write('\033[?25l')
+        sys.stdout.flush()
+        
+        try:
+            primeira_renderizacao = True
+            linhas_anteriores = 0  # Rastrea a quantidade de linhas para apagar o console corretamente
+            
+            while True:
+                linhas = []
+                
+                # --- 1. LÓGICA DO BOT (Atualizada dinamicamente) ---
+                opcao_atual = opcoes[selected]
+                texto_dinamico_bot = msg_bot if msg_bot else ""
+                
+                # Verifica se a opção atual é de voltar para suprimir a descrição
+                if "voltar" in opcao_atual.lower() or opcao_atual.strip() == "..":
+                    description = None
+                    is_voltar = True
+                else:
+                    description = get_description_func(opcao_atual)
+                    is_voltar = False
+                
+                # Adiciona a descrição à fala do bot baseado na seleção
+                if description:
+                    texto_dinamico_bot += f"\n\nDescrição: {description}  "
+                elif not is_voltar:
+                    texto_dinamico_bot += f"\n\nDescrição: (Sem descrição disponível)"
+                
+                # Gera a string do bot e adiciona ao topo da nossa tela
+                bot_string = BOT_say(texto_dinamico_bot)
+                linhas.extend(bot_string.split('\n'))
+                
+                # --- 2. MONTAGEM DO MENU ---
+                linhas.append("") # Espaço vazio antes do menu
+                linhas.append("\033[90m┌" + "─" * (menu_width - 2) + "┐\033[0m")
+                
+                titulo_formatado = f" {titulo} ".center(menu_width - 2)
+                linhas.append("\033[90m│\033[0m\033[1;96m" + titulo_formatado + "\033[0m\033[90m│\033[0m")
+                
+                if subtitulo:
+                    subt_formatado = f" {subtitulo} ".center(menu_width - 2)
+                    linhas.append("\033[90m│\033[0m" + subt_formatado + "\033[90m│\033[0m")
+                
+                linhas.append("\033[90m├" + "─" * (menu_width - 2) + "┤\033[0m")
+                
+                for i, op in enumerate(opcoes):
+                    if i == selected:
+                        line = f"> {op}".ljust(menu_width - 2)
+                        linhas.append("\033[90m│\033[0m\033[7;36m" + line + "\033[0m\033[90m│\033[0m")
+                    else:
+                        line = f"  {op}".ljust(menu_width - 2)
+                        linhas.append("\033[90m│\033[0m" + line + "\033[90m│\033[0m")
+                
+                linhas.append("\033[90m└" + "─" * (menu_width - 2) + "┘\033[0m")
+                linhas.append("") # Espaço
+                linhas.append("Use \033[93m↑/↓\033[0m para navegar, \033[92mEnter\033[0m para selecionar.")
+
+                # --- 3. LÓGICA DE ATUALIZAÇÃO DA TELA (Anti-flicker / Anti-sujeira) ---
+                
+                # Se a interface encolheu (ex: ao passar por cima de 'Voltar'), preenchemos com
+                # linhas vazias para sobrescrever totalmente o rastro da tela antiga
+                while len(linhas) < linhas_anteriores:
+                    linhas.append("")
+
+                # Retorna o cursor para o topo (baseado na quantidade de linhas anterior)
+                if not primeira_renderizacao:
+                    sys.stdout.write(f"\033[{linhas_anteriores}A")
+                
+                primeira_renderizacao = False
+                linhas_anteriores = len(linhas)
+                
+                # Imprime as linhas usando \033[K para limpar resíduos horizontais da linha anterior
+                for linha in linhas:
+                    print(linha + "\033[K")
+                
+                # --- 4. CONTROLES ---
+                key = get_key()
+                if key == 'UP':
+                    selected = (selected - 1) % len(opcoes)
+                elif key == 'DOWN':
+                    selected = (selected + 1) % len(opcoes)
+                elif key == 'ENTER':
+                    return selected
+                elif key == 'q':
+                    return -1
+        finally:
+            sys.stdout.write('\033[?25h')
+            sys.stdout.flush()
+
     def _ler_arquivo_log(self, caminho_log):
         """Lê e retorna as últimas 30 linhas de um arquivo de log específico."""
         log_path = Path(caminho_log)
@@ -352,39 +501,62 @@ class brainGUI:
 
     def _choose_project(self):
         """Menu de seleção de projetos dentro da pasta 'projects/'"""
-        #Escolher o tópico
+        # Escolher o tópico
         topics_list = self._list_topics()
 
         if not topics_list:
-            BOT_print("Nenhum tópico encontrado na pasta 'projects/'.", width=40)
+            os.system('cls' if os.name == 'nt' else 'clear')
+            self.banner()
+            print(BOT_say("Não há nenhum tópico encontrado dentro dessa pasta."))
             get_key()
             return
         
         opcoes_topicos = topics_list + ["Voltar"]
-        idx_topico = self._menu_navegavel( #Menu navegável para encontrar a opção de tópicos
+        
+        # Função para obter descrição de tópico
+        def get_topic_desc(topic_name):
+            if topic_name == "Voltar":
+                return ""
+            return self._get_topic_description(topic_name)
+        
+        # Menu com descrição dinâmica para tópicos
+        idx_topico = self._menu_navegavel_com_descricao(
             "ESCOLHER TÓPICO",
             opcoes_topicos,
+            get_topic_desc,
             msg_bot="Escolha a categoria do projeto.",
             subtitulo=f"{len(topics_list)} tópicos disponíveis"
         )
 
-        if idx_topico is None or idx_topico == -1 or idx_topico == len(topics_list): #Garante que é um idx real
+        if idx_topico is None or idx_topico == -1 or idx_topico == len(topics_list):
             return
             
-        selected_topic = topics_list[idx_topico] #Pego o tópico correto (Vem o nome dos tópicos.)
+        selected_topic = topics_list[idx_topico]
 
         # Agora chamamos o método atualizado que lista pastas
-        projects_list = self._list_projects_in_topic(selected_topic)  #Puxo a lista de pastas dentro do diretório com o tópico escolhido.
+        projects_list = self._list_projects_in_topic(selected_topic)
         
+        # CORREÇÃO AQUI: Se não houver projetos, limpa tudo e exibe apenas a fala do robô de forma limpa
         if not projects_list:
-            BOT_print("Nenhum projeto encontrado na pasta 'projects/'.", width=40)
+            os.system('cls' if os.name == 'nt' else 'clear')
+            self.banner()
+            print(BOT_say("Não há nenhum projeto dentro dessa pasta."))
             get_key()
             return
         
         opcoes_projetos = projects_list + ["Voltar"]
-        idx_proj = self._menu_navegavel( #Gero outro menu navegável para escolher o projeto
+        
+        # Função para obter descrição de projeto
+        def get_project_desc(project_name):
+            if project_name == "Voltar":
+                return ""
+            return self._get_project_description(selected_topic, project_name)
+        
+        # Menu com descrição dinâmica para projetos
+        idx_proj = self._menu_navegavel_com_descricao(
             f"TÓPICO: {selected_topic.upper()}",
             opcoes_projetos,
+            get_project_desc,
             msg_bot="Agora, escolha o projeto para executar.",
             subtitulo=f"{len(projects_list)} projetos disponíveis"
         )
@@ -393,23 +565,22 @@ class brainGUI:
             return
 
         selected_project = projects_list[idx_proj]
-        self.logger.info(f"Iniciando projeto: {selected_topic}/{selected_project}") #O projeto que foi selecionado.
+        self.logger.info(f"Iniciando projeto: {selected_topic}/{selected_project}")
         
         try:
             # LÓGICA DE IMPORTAÇÃO: projects.NomeDaPasta.NomeDoArquivo
-            # Ex: projects.MeuRobo.MeuRobo
             module_path = f"projects.{selected_topic}.{selected_project}.{selected_project}"
-            module = importlib.import_module(module_path) # pego o ponteiro para o objeto do módulo que eu escolhi
+            module = importlib.import_module(module_path)
 
-            importlib.reload(module)  # reinicio o módulo, garantindo que seja a primeira execução dele
+            importlib.reload(module)
             
-            os.system('cls' if os.name == 'nt' else 'clear') #Limpo a interface gráfica
+            os.system('cls' if os.name == 'nt' else 'clear')
             self.banner()
 
-            if hasattr(module, 'app'): #Verifico se no módulo tem o app(), que irá o abrir.
+            if hasattr(module, 'app'):
                 BOT_print(f"O projeto '{selected_project}' ({selected_topic}) foi iniciado. Para pausar ou cancelar clique em 'ctrl+c' ou 'x'.", width=45)
                 try:
-                    module.app()  #Executo o app() que está dentro do módulo
+                    module.app()
                 except Exception as e:
                     print("\n" + "="*50)
                     print("ERRO FATAL NO PROJETO:")
@@ -426,69 +597,137 @@ class brainGUI:
             BOT_print(f"Erro ao carregar módulo: {type(e).__name__}: {e}", width=50)
             get_key()
 
-            
     def _create_new_simulation(self):
-        """Coleta dados do usuário e gera a pasta do projeto com os scripts e cena."""
+        """Fluxo completo: escolher tópico (existente/novo) e depois criar ou copiar projeto."""
 
+        # ── Etapa 0: limpa tela e cabeçalho ──
         os.system('cls' if os.name == 'nt' else 'clear')
         self.banner()
-        print(BOT_say("Vamos criar uma nova simulação! Preencha os dados abaixo.", width=65))
-        print("\n" + "\033[90m" + "─" * 70 + "\033[0m")
-        
-        # Ocultar o cursor no menu navegável é ótimo, mas aqui precisamos dele para o usuário digitar!
-        sys.stdout.write('\033[?25h')
-        sys.stdout.flush()
+        print(BOT_say("Vamos criar uma nova simulação!", width=65))
 
-        try:
-            base_dir = Path.cwd()
-            projects_dir = base_dir / "projects"
-            
-            # Garante que a pasta projects exista para podermos listar
-            projects_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Verifica e exibe os tópicos existentes
+        # Garante que a pasta projects exista
+        projects_dir = Path.cwd() / "projects"
+        projects_dir.mkdir(parents=True, exist_ok=True)
+
+        # ── Etapa 1: escolher tópico ──
+        opcoes_topico = ["Tópico existente", "Novo tópico", "Voltar"]
+        escolha_topico = self._menu_navegavel(
+            "CRIAÇÃO DE SIMULAÇÃO",
+            opcoes_topico,
+            msg_bot="Você quer usar um tópico já existente ou criar um novo?",
+            subtitulo="Etapa 1: Tópico"
+        )
+        if escolha_topico == -1 or escolha_topico == 2:  # Voltar
+            return
+
+        nome_topico_limpo = ""
+        desc_topico = ""
+
+        if escolha_topico == 0:  # Tópico existente
+            topics_list = self._list_topics()
+            if not topics_list:
+                self._exibir_texto_com_bot("Aviso", "Nenhum tópico encontrado. Crie um novo tópico primeiro.")
+                return
+
+            # Reaproveita o menu com descrição dinâmica para escolher tópico
+            opcoes_existentes = topics_list + ["Voltar"]
+
+            def get_topic_desc(topic_name):
+                if topic_name == "Voltar":
+                    return ""
+                return self._get_topic_description(topic_name)
+
+            idx = self._menu_navegavel_com_descricao(
+                "TÓPICO EXISTENTE",
+                opcoes_existentes,
+                get_topic_desc,
+                msg_bot="Escolha o tópico onde o projeto será salvo.",
+                subtitulo=f"{len(topics_list)} tópicos disponíveis"
+            )
+            if idx == -1 or idx == len(topics_list):  # Voltar
+                return
+            nome_topico_limpo = topics_list[idx]
+            desc_topico = self._get_topic_description(nome_topico_limpo)
+            # Não solicita descrição, já existe
+
+        else:  # Novo tópico (escolha_topico == 1)
+            # Mostra tela "limpa" com bot para input
+            os.system('cls' if os.name == 'nt' else 'clear')
+            self.banner()
+            print(BOT_say("Criação de novo tópico", width=50))
+            print("\n" + "\033[90m" + "─" * 70 + "\033[0m")
+
+            # Reexibe tópicos existentes para referência
             topicos_existentes = [d.name for d in projects_dir.iterdir() if d.is_dir() and not d.name.startswith('__')]
-            
             if topicos_existentes:
                 print("\n\033[96mTópicos já existentes:\033[0m")
                 for t in sorted(topicos_existentes):
                     print(f"  \033[90m-\033[0m {t}")
-                print("\033[90m(Digite um nome acima para salvar nele, ou um novo para criar outra pasta. \n OBS: Evite acentuação e espaços!)\033[0m\n")
-            else:
-                print("\n\033[90mNenhum tópico criado ainda. O que você digitar será o primeiro!\033[0m\n")
+                print()
 
-            ## Coleta os inputs
-            # Coleto o tópico
-            nome_topico = input("\033[92m> \033[0mNome do tópico (ex: locomocao): ").strip()
-            if not nome_topico:
-                self._exibir_texto_com_bot("Aviso", "A criação foi cancelada (tópico vazio).")
+            nome_topico_raw = input("\033[92m> \033[0mNome do novo tópico (ex: locomocao): ").strip()
+            if not nome_topico_raw:
+                self._exibir_texto_com_bot("Aviso", "Nome do tópico vazio. Criação cancelada.")
                 return
+            nome_topico_limpo = nome_topico_raw.replace(' ', '_').lower()
 
-            # Coleto a aplicação
+            desc_topico = input("\033[92m> \033[0mDescrição do tópico (opcional): ").strip()
+            if desc_topico:
+                self._save_topic_description(nome_topico_limpo, desc_topico)
+
+        # ── Etapa 2: escolher ação do projeto ──
+        opcoes_projeto = ["Novo projeto", "Copiar Projeto existente", "Voltar"]
+        escolha_proj = self._menu_navegavel(
+            "CRIAÇÃO DE PROJETO",
+            opcoes_projeto,
+            msg_bot=f"Tópico: {nome_topico_limpo}\nComo deseja criar o projeto?",
+            subtitulo="Etapa 2: Projeto"
+        )
+        if escolha_proj == -1 or escolha_proj == 2:  # Voltar
+            return
+
+        if escolha_proj == 0:  # Novo projeto
+            self._create_new_project_scratch(nome_topico_limpo)
+        else:  # Copiar projeto existente
+            self._copy_existing_project(nome_topico_limpo)
+
+    # ---------- Funcionalidade para navegar no projeto ---------
+    def _create_new_project_scratch(self, nome_topico_limpo):
+        """Cria um novo projeto a partir dos templates (fluxo original)."""
+
+        os.system('cls' if os.name == 'nt' else 'clear')
+        self.banner()
+        print(BOT_say("Novo projeto - Preencha os dados abaixo", width=65))
+        print("\n" + "\033[90m" + "─" * 70 + "\033[0m")
+
+        sys.stdout.write('\033[?25h')
+        sys.stdout.flush()
+
+        try:
+            # Coleta os dados
             nome_aplicacao = input("\033[92m> \033[0mNome da aplicação (ex: MeuRobo): ").strip()
             if not nome_aplicacao:
-                self._exibir_texto_com_bot("Aviso", "A criação foi cancelada (nome vazio).")
+                self._exibir_texto_com_bot("Aviso", "Nome da aplicação vazio. Criação cancelada.")
                 return
 
             tempo_simulacao = input("\033[92m> \033[0mTempo de simulação (em segundos): ").strip()
             nome_cena = input("\033[92m> \033[0mNome da cena (ex: cena_basica): ").strip()
 
-            # 2. Prepara os caminhos e remove espaços/extensões
-            nome_topico_limpo = nome_topico.replace(' ', '_').lower()
+            print("\n\033[96m--- Descrição (opcional) ---\033[0m")
+            desc_projeto = input("\033[92m> \033[0mDescrição do projeto: ").strip()
+
+            # Limpeza dos nomes
             nome_aplicacao_limpo = nome_aplicacao.replace('.py', '').replace(' ', '')
             nome_cena_limpo = nome_cena.replace('.ttt', '').replace(' ', '_')
 
             base_dir = Path.cwd()
-            
+
             # Caminhos dos templates
             template_app = base_dir / "brainbyte" / "utils" / "basics" / "app.txt"
             template_scene = base_dir / "brainbyte" / "utils" / "basics" / "scene.ttt"
-            
-            # Caminhos de destino
-            projects_dir = base_dir / "projects"
-            sim_folder = projects_dir / nome_topico_limpo / nome_aplicacao_limpo
-            
-            # Garante que as pastas existam
+
+            # Pasta destino
+            sim_folder = base_dir / "projects" / nome_topico_limpo / nome_aplicacao_limpo
             sim_folder.mkdir(parents=True, exist_ok=True)
 
             arquivo_py = f"{nome_aplicacao_limpo}.py"
@@ -497,27 +736,27 @@ class brainGUI:
             caminho_novo_app = sim_folder / arquivo_py
             caminho_nova_cena = sim_folder / arquivo_ttt
 
-            # 3. Gera o arquivo .py usando o template
+            # Gera .py a partir do template
             if not template_app.exists():
                 raise FileNotFoundError(f"Template de app não encontrado: {template_app}")
-                
             with open(template_app, 'r', encoding='utf-8') as f:
                 conteudo_template = f.read()
-
             conteudo_final = conteudo_template.replace("{name_app}", nome_aplicacao_limpo)
             conteudo_final = conteudo_final.replace("{simulation_time}", tempo_simulacao)
             conteudo_final = conteudo_final.replace("{name_scene}", nome_cena_limpo)
-
             with open(caminho_novo_app, 'w', encoding='utf-8') as f:
                 f.write(conteudo_final)
 
-            # 4. Copia e renomeia o template da cena
+            # Copia cena
             if not template_scene.exists():
                 raise FileNotFoundError(f"Template de cena não encontrado: {template_scene}")
-                
             shutil.copy2(template_scene, caminho_nova_cena)
 
-            # 5. Feedback de sucesso e fala da bot
+            # Salva descrição do projeto
+            if desc_projeto:
+                self._save_project_description(nome_topico_limpo, nome_aplicacao_limpo, desc_projeto)
+
+            # Feedback de sucesso
             mensagem_sucesso = (
                 f"Simulação criada com sucesso!\n\n"
                 f"📁 Projeto salvo em: projects/{nome_topico_limpo}/{nome_aplicacao_limpo}/\n"
@@ -527,43 +766,154 @@ class brainGUI:
             )
             self._exibir_texto_com_bot("Sucesso!", mensagem_sucesso)
 
-            # 6. Abre o arquivo .py no editor padrão do sistema
+            # Abre o .py no editor
             path_py_str = str(caminho_novo_app.resolve())
             try:
                 if platform.system() == 'Windows':
                     os.startfile(path_py_str)
-                elif platform.system() == 'Darwin': # macOS
+                elif platform.system() == 'Darwin':
                     subprocess.call(('open', path_py_str))
-                else: # Linux
+                else:
                     subprocess.call(('xdg-open', path_py_str))
             except Exception as e:
-                self.logger.warning(f"Não foi possível abrir o arquivo automaticamente: {e}")
+                self.logger.warning(f"Não foi possível abrir o arquivo: {e}")
 
-            # 7. Carrega a cena no CoppeliaSim silenciosamente (sem dar run)
+            # Carrega cena no CoppeliaSim (se aberto)
             try:
                 client = RemoteAPIClient()
                 sim = client.require('sim')
-                # O CoppeliaSim precisa do caminho absoluto para carregar a cena corretamente
                 path_cena_str = str(caminho_nova_cena.resolve())
                 sim.loadScene(path_cena_str)
-                self.logger.info(f"Cena {arquivo_ttt} carregada no CoppeliaSim com sucesso.")
+                self.logger.info(f"Cena {arquivo_ttt} carregada com sucesso.")
             except Exception as e:
-                # Se o Coppelia não estiver aberto, ele avisa no log sem quebrar a criação
-                self.logger.warning(f"CoppeliaSim não parece estar aberto para carregar a cena. Erro: {e}")
+                self.logger.warning(f"CoppeliaSim não disponível para carregar cena: {e}")
 
         except Exception as e:
             msg = traceback.format_exc()
-            self.logger.error(f"Erro ao criar simulação: {msg}")
-            self._exibir_texto_com_bot(
-                "Erro Crítico", 
-                f"Não foi possível criar a simulação:\n{e}\nTraceback:\n{msg}"
-            )
+            self.logger.error(f"Erro ao criar projeto: {msg}")
+            self._exibir_texto_com_bot("Erro", f"Não foi possível criar o projeto:\n{e}")
         finally:
-            # Esconde o cursor de volta pro menu continuar limpo
             sys.stdout.write('\033[?25l')
             sys.stdout.flush()
 
-    # ---------- Funcionalidade para navegar no projeto ---------
+    def _copy_existing_project(self, nome_topico_destino):
+        """Copia um projeto existente para dentro do tópico escolhido, com novo nome."""
+
+        # 1. Selecionar projeto de origem
+        source_topic, source_project = self._select_project_interactively()
+        if not source_topic or not source_project:
+            return  # Usuário cancelou
+
+        # 2. Pedir novo nome para o projeto
+        os.system('cls' if os.name == 'nt' else 'clear')
+        self.banner()
+        print(BOT_say("Copiar projeto existente", width=60))
+        print(f"\n\033[90mOrigem: projects/{source_topic}/{source_project}\033[0m")
+        print(f"\033[90mDestino: projects/{nome_topico_destino}/<novo_nome>\033[0m\n")
+
+        sys.stdout.write('\033[?25h')
+        sys.stdout.flush()
+
+        novo_nome = input("\033[92m> \033[0mNovo nome para o projeto copiado: ").strip()
+        if not novo_nome:
+            self._exibir_texto_com_bot("Aviso", "Nome vazio. Cópia cancelada.")
+            return
+
+        novo_nome_limpo = novo_nome.replace(' ', '').replace('.py', '')
+        desc_projeto = input("\033[92m> \033[0mNova descrição (opcional, Enter mantém original): ").strip()
+
+        # Se descrição em branco, podemos tentar carregar a original do projeto fonte
+        if not desc_projeto:
+            desc_original = self._get_project_description(source_topic, source_project)
+        else:
+            desc_original = desc_projeto
+
+        base_dir = Path.cwd()
+        origem_path = base_dir / "projects" / source_topic / source_project
+        destino_path = base_dir / "projects" / nome_topico_destino / novo_nome_limpo
+
+        if not origem_path.exists():
+            self._exibir_texto_com_bot("Erro", f"Projeto de origem não encontrado:\n{origem_path}")
+            return
+
+        try:
+            # Copia toda a pasta do projeto
+            shutil.copytree(origem_path, destino_path)
+            # Se houver um arquivo .py com o nome antigo, renomeia para o novo nome
+            old_py = destino_path / f"{source_project}.py"
+            new_py = destino_path / f"{novo_nome_limpo}.py"
+            if old_py.exists() and old_py != new_py:
+                old_py.rename(new_py)
+            # Atualiza a descrição se foi fornecida
+            if desc_original:
+                self._save_project_description(nome_topico_destino, novo_nome_limpo, desc_original)
+
+            mensagem = (
+                f"Projeto copiado com sucesso!\n\n"
+                f"📍 Novo projeto: projects/{nome_topico_destino}/{novo_nome_limpo}/\n"
+                f"📄 Script principal: {novo_nome_limpo}.py"
+            )
+            self._exibir_texto_com_bot("Cópia concluída", mensagem)
+        except Exception as e:
+            msg = traceback.format_exc()
+            self.logger.error(f"Erro ao copiar projeto: {msg}")
+            self._exibir_texto_com_bot("Erro", f"Falha ao copiar projeto:\n{e}")
+        finally:
+            sys.stdout.write('\033[?25l')
+            sys.stdout.flush()
+
+    def _select_project_interactively(self):
+        """Usa os menus para que o usuário escolha um tópico e um projeto.
+        Retorna (topic_name, project_name) ou (None, None) se cancelar."""
+
+        topics_list = self._list_topics()
+        if not topics_list:
+            self._exibir_texto_com_bot("Aviso", "Nenhum tópico disponível para copiar.")
+            return None, None
+
+        opcoes_topicos = topics_list + ["Voltar"]
+
+        def get_topic_desc(topic_name):
+            if topic_name == "Voltar":
+                return ""
+            return self._get_topic_description(topic_name)
+
+        idx_topico = self._menu_navegavel_com_descricao(
+            "SELECIONE O TÓPICO DE ORIGEM",
+            opcoes_topicos,
+            get_topic_desc,
+            msg_bot="De qual tópico você deseja copiar o projeto?",
+            subtitulo=f"{len(topics_list)} tópicos disponíveis"
+        )
+        if idx_topico == -1 or idx_topico == len(topics_list):
+            return None, None
+
+        selected_topic = topics_list[idx_topico]
+
+        projects_list = self._list_projects_in_topic(selected_topic)
+        if not projects_list:
+            self._exibir_texto_com_bot("Aviso", f"O tópico '{selected_topic}' não possui projetos.")
+            return None, None
+
+        opcoes_projetos = projects_list + ["Voltar"]
+
+        def get_project_desc(project_name):
+            if project_name == "Voltar":
+                return ""
+            return self._get_project_description(selected_topic, project_name)
+
+        idx_proj = self._menu_navegavel_com_descricao(
+            f"PROJETOS EM {selected_topic.upper()}",
+            opcoes_projetos,
+            get_project_desc,
+            msg_bot="Escolha o projeto que será copiado.",
+            subtitulo=f"{len(projects_list)} projetos disponíveis"
+        )
+        if idx_proj == -1 or idx_proj == len(projects_list):
+            return None, None
+
+        return selected_topic, projects_list[idx_proj]
+
     def _navegate_project(self):
         """
         Navegador interativo de arquivos estilo terminal.
@@ -773,7 +1123,7 @@ class brainGUI:
             return f"{prefix}[Permissão negada]\n"
         
         # Filtra itens que não queremos mostrar
-        ignore_patterns = {'__init__.py','config.json','pyproject.toml','setup.py','requirements.txt','requirements-dev.txt', '__pycache__', '.git', '.venv', 'venv', 'env', '.idea', '.vscode', 'node_modules', 'build', 'dist'}
+        ignore_patterns = {'__init__.py','config.json','pyproject.toml','setup.py','requirements.txt','requirements-dev.txt', '__pycache__', '.git', '.venv', 'venv', 'env', '.idea', '.vscode', 'node_modules', 'build', 'dist','description.txt'}
         filtered_items = [item for item in items if item.name not in ignore_patterns and not item.name.startswith('.')]
         
         for i, item in enumerate(filtered_items):
@@ -789,8 +1139,52 @@ class brainGUI:
         
         return '\n'.join(lines)
 
+    def _delete_project(self):
+        """Deleta um projeto inteiro após seleção por menus e confirmação."""
+
+        # Seleciona tópico e projeto usando o mesmo fluxo interativo
+        selected_topic, selected_project = self._select_project_interactively()
+        if not selected_topic or not selected_project:
+            return  # Usuário cancelou a seleção
+
+        # Caminho completo da pasta do projeto
+        projeto_path = Path.cwd() / "projects" / selected_topic / selected_project
+
+        # Confirmação via menu (Sim/Não)
+        opcoes_confirmacao = [
+            "Sim, deletar permanentemente",
+            "Não, cancelar"
+        ]
+        confirm = self._menu_navegavel(
+            "CONFIRMAR EXCLUSÃO",
+            opcoes_confirmacao,
+            msg_bot=f"Tem certeza que deseja apagar o projeto?\n\n"
+                    f"📁 {selected_topic}/{selected_project}\n\n"
+                    f"Esta ação não pode ser desfeita!",
+            subtitulo="⚠️  Atenção!"
+        )
+
+        if confirm != 0:  # Qualquer coisa diferente de Sim (0) cancela
+            self._exibir_texto_com_bot("Cancelado", "A exclusão do projeto foi cancelada.")
+            return
+
+        # Executa a exclusão
+        try:
+            shutil.rmtree(projeto_path)
+            self.logger.info(f"Projeto deletado: {selected_topic}/{selected_project}")
+            self._exibir_texto_com_bot(
+                "Projeto deletado",
+                f"O projeto '{selected_project}' foi removido com sucesso do tópico '{selected_topic}'."
+            )
+        except Exception as e:
+            self.logger.error(f"Erro ao deletar projeto: {e}")
+            self._exibir_texto_com_bot(
+                "Erro",
+                f"Não foi possível deletar o projeto:\n{e}"
+            )
+            
     # ---------- Loop principal ----------
-    def run(self): #A gui roda num loop while, enquanto o projeto está sendo executado.
+    def run(self):
         """Método principal: exibe menu principal e despacha ações."""
         intro_text = (
             "Bem-vindo ao BRAINBYTE! Eu sou o Blue, seu agente guia. "
@@ -800,14 +1194,14 @@ class brainGUI:
         while True:
             opcoes_principal = [
                 "Iniciar simulação",      # 0
-                "Criar nova simulação",   # 1 
-                "Navegar pelo projeto",   # 2
-                "Comandos",               # 3
+                "Criar nova simulação",   # 1
+                "Deletar projeto",        # 2  ← NOVA OPÇÃO 
+                "Navegar pelo projeto",   # 3
                 "Ver Logs",               # 4
                 "Configurações",          # 5
                 "Ajuda",                  # 6
                 "Sobre o sistema",        # 7
-                "Sair"                    # 8
+                "Sair"                    # 8  
             ]
             escolha = self._menu_navegavel(
                 "MENU PRINCIPAL",
@@ -816,47 +1210,35 @@ class brainGUI:
                 subtitulo=None
             )
             
-            if escolha == -1 or escolha == 8:  # Sair
-                # Limpa a tela para a despedida ficar limpa
+            if escolha == -1 or escolha == 8:  # Sair agora é índice 8
                 os.system('cls' if os.name == 'nt' else 'clear')
                 self.banner()
                 print(BOT_say("Até logo! Foi bom ajudar você.", width=40))
                 break
-            elif escolha == 0: # Inicia simulação
+            elif escolha == 0:   # Iniciar simulação
                 self._choose_project()
-            elif escolha == 1: # Criar nova simulação (Em desenvolvimento)
-                '''self._exibir_texto_com_bot(
-                    "Criar Nova Simulação",
-                    "Módulo em desenvolvimento...\n"
-                    "Em breve você poderá projetar novas simulações a partir daqui!"
-                )'''
+            elif escolha == 1:   # Criar nova simulação
                 self._create_new_simulation()
-            elif escolha == 2: # Navegar pelo projeto
+            elif escolha == 2:   # Deletar projeto
+                self._delete_project()
+            elif escolha == 3:   # Navegar pelo projeto
                 self._navegate_project()
-            elif escolha == 3: # Comandos
-                self._exibir_texto_com_bot(
-                    "Comandos Disponíveis",
-                    "COMANDOS (a implementar):\n"
-                    "  > run <script>  - executa um script\n"
-                    "  > llm <prompt>   - consulta um modelo de linguagem\n"
-                    "  > status         - mostra estado da infraestrutura"
-                )
-            elif escolha == 4:  # Ver Logs
+            elif escolha == 4:   # Ver Logs
                 self._menu_logs()
-            elif escolha == 5: # Configurações
+            elif escolha == 5:   # Configurações
                 self._menu_configuracoes()
-            elif escolha == 6: # Ajuda
+            elif escolha == 6:   # Ajuda
                 self._exibir_texto_com_bot(
                     "Ajuda",
                     "Aqui você encontra ajuda sobre as funcionalidades.\n"
                     "- Iniciar simulação: execute exemplos pré-programados.\n"
                     "- Criar nova simulação: crie suas próprias simulações.\n"
-                    "- Comandos: lista de comandos disponíveis.\n"
-                    "- Estrutura: mostra como o projeto está organizado.\n"
+                    "- Deletar projeto: remova um projeto permanentemente.\n"
+                    "- Navegar pelo projeto: explore a estrutura de arquivos.\n"
                     "- Configurações: ajuste opções do sistema.\n"
                     "- Ver Logs: exibe os últimos registros de execução."
                 )
-            elif escolha == 7: # Sobre o projeto
+            elif escolha == 7:   # Sobre o sistema
                 self._exibir_texto_com_bot(
                     "Sobre o BRAINBYTE",
                     "BRAINBYTE - Gerenciador de Infraestrutura de Robótica\n\n"

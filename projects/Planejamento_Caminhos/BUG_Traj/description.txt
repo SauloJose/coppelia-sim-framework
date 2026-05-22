@@ -1,0 +1,1 @@
+﻿Implementação do algoritmo BUG para planejamento de trajetória em ambientes com obstáculos.

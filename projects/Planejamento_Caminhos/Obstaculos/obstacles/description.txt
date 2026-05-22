@@ -1,0 +1,1 @@
+﻿Detecção e representação de obstáculos no ambiente de simulação.
