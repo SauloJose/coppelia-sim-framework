@@ -436,9 +436,37 @@ class brainGUI:
         print(conteudo)
         print("\n" + "\033[90m" + "─" * 70 + "\033[0m")
         print("\nPressione qualquer tecla para voltar...")
-        get_key()  # aguarda
-        flush_input() #limpa eventuais sobras
 
+        self._flush_input() #limpa eventuais sobras
+        get_key()  # aguarda
+
+        sys.stdout.write('\033[?25h')
+        sys.stdout.flush()
+
+
+    def _flush_input(self):
+        """Esvazia o buffer de entrada, descartando teclas pendentes."""
+        if os.name == 'nt':
+            import msvcrt
+            while msvcrt.kbhit():
+                msvcrt.getch()
+        else:
+            import select
+            import termios, tty
+            fd = sys.stdin.fileno()
+            old = termios.tcgetattr(fd)
+            try:
+                tty.setraw(fd)
+                while True:
+                    r, _, _ = select.select([sys.stdin], [], [], 0.0)
+                    if r:
+                        sys.stdin.read(1)
+                    else:
+                        break
+            except:
+                pass
+            finally:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old)
     # ---------- Funcionalidades originais ----------
     def _list_topics(self):
         """Lista as subpastas em 'projects/' que servem como categorias/tópicos."""
@@ -750,21 +778,24 @@ class brainGUI:
                 if platform.system() == 'Windows':
                     os.startfile(path_py_str)
                 elif platform.system() == 'Darwin':
-                    subprocess.call(('open', path_py_str))
+                    subprocess.Popen(('open', path_py_str))
                 else:
-                    subprocess.call(('xdg-open', path_py_str))
+                    subprocess.Popen(('xdg-open', path_py_str))
             except Exception as e:
                 self.logger.warning(f"Não foi possível abrir o arquivo: {e}")
 
             # Carrega cena no CoppeliaSim (se aberto)
-            try:
-                client = RemoteAPIClient()
-                sim = client.require('sim')
-                path_cena_str = str(caminho_nova_cena.resolve())
-                sim.loadScene(path_cena_str)
-                self.logger.info(f"Cena {arquivo_ttt} carregada com sucesso.")
-            except Exception as e:
-                self.logger.warning(f"CoppeliaSim não disponível para carregar cena: {e}")
+            if self._is_coppeliasim_running():
+                try:
+                    client = RemoteAPIClient()
+                    sim = client.require('sim')
+                    path_cena_str = str(caminho_nova_cena.resolve())
+                    sim.loadScene(path_cena_str)
+                    self.logger.info(f"Cena {arquivo_ttt} carregada com sucesso.")
+                except Exception as e:
+                    self.logger.warning(f"Falha ao carregar cena: {e}")
+            else:
+                self.logger.info("CoppeliaSim não está em execução – cena não carregada.")
 
         except Exception as e:
             msg = traceback.format_exc()
@@ -774,6 +805,16 @@ class brainGUI:
             sys.stdout.write('\033[?25l')
             sys.stdout.flush()
 
+    def _is_coppeliasim_running(self, host='127.0.0.1', port=23000, timeout=0.5):
+        """Retorna True se o CoppeliaSim estiver ouvindo na porta padrão."""
+        import socket
+        try:
+            s = socket.create_connection((host, port), timeout=timeout)
+            s.close()
+            return True
+        except:
+            return False
+    
     def _copy_existing_project(self, nome_topico_destino):
         """Copia um projeto existente para dentro do tópico escolhido, com novo nome."""
 
