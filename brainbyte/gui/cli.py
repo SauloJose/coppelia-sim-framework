@@ -7,7 +7,7 @@ import textwrap
 import json
 from brainbyte.gui.auxF import * 
 
-from brainbyte.utils.logging import *  # Certifique-se de que este módulo existe
+from brainbyte.utils.logging import *  
 from brainbyte.core.paths import *
 import traceback
 try:
@@ -37,7 +37,7 @@ except ImportError:
 
 import platform
 import subprocess
-from pathlib import Path # Garantindo que Path esteja disponível, caso não esteja no topo do arquivo
+from pathlib import Path 
 from coppeliasim_zmqremoteapi_client import RemoteAPIClient
 from textwrap import dedent
 
@@ -459,8 +459,37 @@ class brainGUI:
         print(conteudo)
         print("\n" + "\033[90m" + "─" * 70 + "\033[0m")
         print("\nPressione qualquer tecla para voltar...")
+
+        self._flush_input() #limpa eventuais sobras
         get_key()  # aguarda
 
+        sys.stdout.write('\033[?25h')
+        sys.stdout.flush()
+
+
+    def _flush_input(self):
+        """Esvazia o buffer de entrada, descartando teclas pendentes."""
+        if os.name == 'nt':
+            import msvcrt
+            while msvcrt.kbhit():
+                msvcrt.getch()
+        else:
+            import select
+            import termios, tty
+            fd = sys.stdin.fileno()
+            old = termios.tcgetattr(fd)
+            try:
+                tty.setraw(fd)
+                while True:
+                    r, _, _ = select.select([sys.stdin], [], [], 0.0)
+                    if r:
+                        sys.stdin.read(1)
+                    else:
+                        break
+            except:
+                pass
+            finally:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old)
     # ---------- Funcionalidades originais ----------
     def _list_topics(self):
         """Lista as subpastas em 'projects/' que servem como categorias/tópicos."""
@@ -591,7 +620,7 @@ class brainGUI:
                 BOT_print(f"Erro: O arquivo '{selected_project}.py' não contém a função 'app()'.", width=45)
                 get_key()
 
-            msvcrt.getch()
+            get_key()
                 
         except Exception as e:
             BOT_print(f"Erro ao carregar módulo: {type(e).__name__}: {e}", width=50)

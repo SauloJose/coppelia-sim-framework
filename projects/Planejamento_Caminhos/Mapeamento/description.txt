@@ -1,0 +1,1 @@
+Esse projeto serve para testar métodos de mapeamento e discretização para futuras implementações de A*, D* e etc.

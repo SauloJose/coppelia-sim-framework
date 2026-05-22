@@ -14,6 +14,27 @@ CYAN = '\033[96m'
 RESET = "\033[0m"
 
 
+def flush_input():
+    """Descarta todas as teclas pendentes no buffer de entrada."""
+    if os.name == 'nt':
+        import msvcrt
+        while msvcrt.kbhit():
+            msvcrt.getch()
+    else:
+        import termios, tty
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            while True:
+                r, _, _ = select.select([sys.stdin], [], [], 0.0)
+                if r:
+                    sys.stdin.read(1)
+                else:
+                    break
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+            
 def get_key():
     """Captura uma tecla pressionada de forma cross-platform."""
     if os.name == 'nt':
