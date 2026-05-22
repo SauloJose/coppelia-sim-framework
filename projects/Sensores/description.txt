@@ -1,0 +1,1 @@
+﻿Testes e integração de sensores como câmeras, LiDAR, sônar e outros dispositivos de sensoriamento.

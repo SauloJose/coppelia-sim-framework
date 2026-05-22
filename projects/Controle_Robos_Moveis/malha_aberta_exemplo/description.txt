@@ -1,0 +1,1 @@
+﻿Exemplo de trajetória em malha aberta para robôs móveis sem feedback de posição.
