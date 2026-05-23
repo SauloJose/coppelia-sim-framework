@@ -81,7 +81,7 @@ class turtleBot(BaseApp):
         self.plot_robot, = self.ax.plot([],[],'ro',label='Robô',zorder=5)
         self.plot_lidar, = self.ax.plot([],[],'b.',markersize=1, label='Lidar')
 
-    def loop(self, t):
+    def loop(self, t, actual_state=None):
         """ Etapas do loop"""
         try:
             #Controlador manual

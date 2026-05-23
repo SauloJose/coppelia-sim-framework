@@ -102,7 +102,6 @@ class BaseApp:
         try:
             # Load scene
             if self.scene_file:
-                # Find the absolute path of the script that called BaseApp
                 try:
                     child_module = sys.modules[self.__class__.__module__]
                     base_dir = os.path.dirname(os.path.abspath(child_module.__file__))
@@ -125,42 +124,26 @@ class BaseApp:
                 self.sim.step()
                 time.sleep(0.05)
             
-            # NECESSARY: Make the bridge to communicate with the Coppelia via ZeroMQ
+            # Inicializa a ponte de comunicação
             self.bridge = SimulationBridge()
 
-            # NECESSARY: Setup my simulation
+            # Configuração inicial do usuário
             self.setup()
-            
-            # NECESSARY: post_start logic to init my configurations
             self.post_start()
             
             t = self.simu_time()
+            self.logger.info("Simulation loop started. Press Ctrl+C in terminal to interrupt.")
 
-            # Main loop of the simulation
+            # Loop principal corrigido (Apenas 1 step por iteração)
             while t < self.sim_time:
                 current_state = self.bridge.step()
-
                 t = current_state.get('sim_time', t + self.dt)
                 
-                try:
-                    if keyboard.is_pressed('x'):
-                        self.logger.warning(f"Simulation interrupted by user at t={t:.2f}s")
-                        break
-                except (ImportError, PermissionError, OSError):
-                    # Ampliado para capturar erros de permissão de root no Linux
-                    self.logger.error("Error on Keyboard input (request sudo in Linux/Mac). Press Ctrl+C to stop.")
-                
-                # Passamos o tempo e opcionalmente o estado atual para o filho
+                # Executa a lógica customizada da classe filha
                 self.loop(t=t, actual_state=current_state)
 
-                # CORREÇÃO CRÍTICA: Atualiza a variável current_state com o novo step
-                current_state = self.bridge.step()
-
-                # Atualiza o tempo para a verificação do while
-                t = current_state.get('sim_time', t + 0.05)
-
         except KeyboardInterrupt:
-            self.logger.warning("Simulation manually interrupted from terminal.")
+            self.logger.warning("\nSimulation manually interrupted from terminal (Ctrl+C).")
         except Exception as e:
             msg = traceback.format_exc()
             self.logger.exception(f"Unexpected error in run() from BaseApp: {e}\n => Traceback: \n\n{msg}")
@@ -169,12 +152,11 @@ class BaseApp:
             self.logger.info("Stopping simulation in finally...")
             try:
                 self.stop()
-                if hasattr(self, 'bridge'):# stop de bridge connection
+                if hasattr(self, 'bridge'):
                     self.bridge.close()
                 self.sim.stopSimulation()
-            except:
-                return
-    
+            except Exception:
+                pass
     # Fetch standard information 
     def d_time(self):
         """

@@ -583,19 +583,27 @@ class brainGUI:
             self.banner()
 
             if hasattr(module, 'app'):
-                BOT_print(f"O projeto '{selected_project}' ({selected_topic}) foi iniciado. "
-                        "Aguardando até 10 segundos pela resposta...", width=50)
-
-                status, info = self._run_module_app(module, timeout=10)
-
-                if status == 'timeout':
+                BOT_print("Verificando conexão com o CoppeliaSim...", width=50)
+                
+                # Verifica se o simulador está aberto ANTES de rodar
+                if not self._is_coppeliasim_running():
                     os.system('cls' if os.name == 'nt' else 'clear')
                     self.banner()
-                    BOT_print("O projeto não respondeu em 10 segundos. "
-                            "Verifique se o CoppeliaSim está rodando ou se o script trava ao conectar. "
-                            "Retornando ao menu...", width=55)
+                    BOT_print("Erro: O CoppeliaSim não está rodando na porta 23000.\n"
+                              "Abra o simulador e inicie a cena antes de rodar o projeto.", width=55)
                     get_key()
-                elif status == 'exception':
+                    return
+
+                os.system('cls' if os.name == 'nt' else 'clear')
+                self.banner()
+                BOT_print(f"O projeto '{selected_project}' foi iniciado com sucesso!\n"
+                          f"Acompanhe a execução no terminal e os gráficos na tela.\n"
+                          f"Pressione Ctrl+C para encerrar a simulação.", width=55)
+
+                # Executa com timeout=None para rodar na Thread Principal com segurança
+                status, info = self._run_module_app(module, timeout=None)
+
+                if status == 'exception':
                     e, tb = info
                     print("\n" + "="*50)
                     print("ERRO FATAL NO PROJETO:")
@@ -603,10 +611,10 @@ class brainGUI:
                     print("="*50 + "\n")
                     input("Pressione ENTER para voltar ao menu...")
                 else:
-                    # Sucesso: projeto terminou normalmente
+                    # Sucesso: terminou normalmente ou via Ctrl+C limpo
                     os.system('cls' if os.name == 'nt' else 'clear')
                     self.banner()
-                    BOT_print("Projeto finalizado.", width=40)
+                    BOT_print("Projeto finalizado com sucesso.", width=40)
                     get_key()
             else:
                 BOT_print(f"Erro: O arquivo '{selected_project}.py' não contém a função 'app()'.", width=45)
@@ -818,13 +826,25 @@ class brainGUI:
             sys.stdout.write('\033[?25l')
             sys.stdout.flush()
 
-    def _run_module_app(self, module, timeout=10):
+    def _run_module_app(self, module, timeout=None):
         """
-        Executa module.app() em uma thread separada, com timeout.
-        Retorna ('success', None) se terminou sem erros.
-        Retorna ('timeout', None) se excedeu o tempo.
-        Retorna ('exception', (exceção, traceback)) se houve erro.
+        Executa module.app(). Se timeout for None, roda diretamente na
+        Thread Principal para garantir compatibilidade com Matplotlib e Ctrl+C.
         """
+        import traceback
+
+        # Se não houver timeout, roda na Thread Principal (Nativo e Seguro)
+        if timeout is None:
+            try:
+                module.app()
+                return 'success', None
+            except KeyboardInterrupt:
+                # Captura o Ctrl+C caso o próprio app não o trate completamente
+                return 'success', None
+            except Exception as e:
+                return 'exception', (e, traceback.format_exc())
+
+        # Caso precise de timeout (Lógica antiga em thread secundária)
         import threading
         exception_info = None
         completed = threading.Event()
@@ -1245,7 +1265,18 @@ class brainGUI:
                 "Erro",
                 f"Não foi possível deletar o projeto:\n{e}"
             )
-            
+
+    def __clear_all_window(self):
+        """
+            Garantir que a tela esteja completamente limpa
+        """ 
+        if os.name == 'nt':
+            os.system('cls')
+        else:
+            # \033[2J (limpa tela), \033[3J (limpa scrollback), \033[H (reseta cursor)
+            sys.stdout.write("\033[2J\033[3J\033[H")
+            sys.stdout.flush()
+
     # ---------- Loop principal ----------
     def run(self):
         """Método principal: exibe menu principal e despacha ações."""
@@ -1255,6 +1286,8 @@ class brainGUI:
             "Use as setas para navegar e Enter para selecionar."
         )
         while True:
+            self.__clear_all_window()
+
             opcoes_principal = [
                 "Iniciar simulação",      # 0
                 "Criar nova simulação",   # 1
@@ -1292,22 +1325,20 @@ class brainGUI:
                 self._menu_configuracoes()
             elif escolha == 6:   # Ajuda
                 self._exibir_texto_com_bot(
-                    "Ajuda",
                     "Aqui você encontra ajuda sobre as funcionalidades.\n"
                     "- Iniciar simulação: execute exemplos pré-programados.\n"
                     "- Criar nova simulação: crie suas próprias simulações.\n"
                     "- Deletar projeto: remova um projeto permanentemente.\n"
                     "- Navegar pelo projeto: explore a estrutura de arquivos.\n"
                     "- Configurações: ajuste opções do sistema.\n"
-                    "- Ver Logs: exibe os últimos registros de execução."
+                    "- Ver Logs: exibe os últimos registros de execução.",'Espero que tenha lhe ajudado.'
                 )
             elif escolha == 7:   # Sobre o sistema
                 self._exibir_texto_com_bot(
-                    "Sobre o BRAINBYTE",
                     "BRAINBYTE - Gerenciador de Infraestrutura de Robótica\n\n"
                     "Funcionalidades:\n"
                     "• Organização de scripts de simulação\n"
                     "• Interface CLI amigável com mascote bot\n"
                     "• Configurações flexíveis (CLI/ROS)\n"
-                    "• Estrutura modular pronta para expansão"
+                    "• Estrutura modular pronta para expansão",'Espero que tenha lhe ajudado.'
                 )
