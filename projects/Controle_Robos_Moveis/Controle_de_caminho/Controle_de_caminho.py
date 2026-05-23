@@ -105,7 +105,7 @@ class Controle_de_caminho(BaseApp):
             msg = traceback.format_exc()
             self.logger.error(f"Error in Handshake with CoppeliaSim ({e})! \n Traceback:\n{msg}") 
     
-    def loop(self, t):
+    def loop(self, t, actual_state=None):
         """
         Núcleo de execução contínua. 
         Implemente aqui a lógica de controle principal, leitura de sensores e atualização de atuadores.

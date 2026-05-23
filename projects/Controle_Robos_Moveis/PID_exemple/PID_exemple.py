@@ -56,7 +56,7 @@ class PIDSimu(BaseApp):
         self.logger.info(f'Initial robot position: x={pos[0]:.2f}, y={pos[1]:.2f}')
 
     
-    def loop(self, t):
+    def loop(self, t,actual_state=None):
         """ Etapas do loop"""
         try:
             estado_atual = self.robot.pose 

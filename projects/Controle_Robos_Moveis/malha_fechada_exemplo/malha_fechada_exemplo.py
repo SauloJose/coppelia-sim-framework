@@ -118,7 +118,7 @@ class LocomocaoMF(BaseApp):
         # Armazenar referência para plotagem
         self.ref_pos = np.array([x_ref, y_ref, 0.0])
 
-    def loop(self, t):
+    def loop(self, t,actual_state=None):
         t = self.sim.getSimulationTime()
         """Executado a cada passo de simulação."""
         # Gerar velocidades de referência baseado na trajetória Lissajous

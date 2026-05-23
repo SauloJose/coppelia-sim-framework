@@ -142,7 +142,7 @@ class ObstacleAvoidanceTester(BaseApp):
         except Exception as e:
             self.logger.error(f"Erro ao capturar dados iniciais do sensor: {e}")
 
-    def loop(self, t):
+    def loop(self, t,actual_state=None):
         """Executado a cada passo da simulação com lógica de evasão."""
         try:
             # 1. Puxar dados do cache da Bridge (Zero-Lag)

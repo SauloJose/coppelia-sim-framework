@@ -165,7 +165,7 @@ class LaserVisualizationExample(BaseApp):
         pos = self.robot.pose
         self.logger.info(f'Initial robot position: x={pos[0]:.2f}, y={pos[1]:.2f}')
 
-    def loop(self, t):
+    def loop(self, t,actual_state=None):
         """Executado a cada passo da simulação com lógica de evasão."""
         try:
             # 1. Puxar dados do cache da Bridge (Zero-Lag)
