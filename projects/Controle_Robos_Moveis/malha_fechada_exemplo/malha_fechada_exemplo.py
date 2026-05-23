@@ -171,6 +171,7 @@ class LocomocaoMF(BaseApp):
         self.logger.info("Parando e finalizando simulação...")
         try:
             self.robot.stop()
+            self.logger.info("O robô foi corretamente desligado...")
         except Exception as e:
             self.logger.warning(f"Erro ao parar motores: {e}")
 

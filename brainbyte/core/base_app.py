@@ -151,10 +151,14 @@ class BaseApp:
         finally:    
             self.logger.info("Stopping simulation in finally...")
             try:
+                self.logger.info("trying to finish the simulation with the stop() method")
                 self.stop()
+                self.logger.info("stop() had been executed sucessfull")
                 if hasattr(self, 'bridge'):
+                    self.logger.info("Closing Bridge Conection")
                     self.bridge.close()
                 self.sim.stopSimulation()
+                self.logger.info("Simulation was sucessfull finished")
             except Exception:
                 pass
     # Fetch standard information 
