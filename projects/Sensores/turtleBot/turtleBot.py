@@ -102,16 +102,15 @@ class turtleBot(BaseApp):
 
             # --- Atualiza plot do lidar com limite de FPS ---
             self.plot_counter += 1
-            if self.plot_counter % 2 == 0:
-                lx = data_sensor[:,0]
-                ly = data_sensor[:,1]
-                self.plot_lidar.set_data(lx, ly)
-                
-                pos = self.robot.pose
-                self.plot_robot.set_data([pos[0]], [pos[1]])
-
-                self.fig.canvas.draw()
-                self.fig.canvas.flush_events()
+            #if self.plot_counter % 2 == 0:
+            lx = data_sensor[:,0]
+            ly = data_sensor[:,1]
+            self.plot_lidar.set_data(lx, ly)
+            
+            pos = self.robot.pose
+            self.plot_robot.set_data([pos[0]], [pos[1]])
+            self.fig.canvas.draw()
+            self.fig.canvas.flush_events()
 
         except Exception as e:
             # CHAVES DUPLAS AQUI:

@@ -1,98 +1,119 @@
-from brainbyte import BaseApp              # A aplicação básica está aqui
-from brainbyte.robots import * # Os robôs configurados estão nessa Pasta 
-from brainbyte.control.automatic import * # Controle automático    
-from brainbyte.control.manual import * # Controle Manual  
-from brainbyte.core.bridge import SimulationBridge
-import numpy as np
-import traceback
+from brainbyte import BaseApp
+from brainbyte.robots.movel.TurtleBot import *
+from brainbyte.control.automatic import *   
+from brainbyte.sensors.LDS_02 import *
+from brainbyte.gui.auxF import get_key
+from brainbyte.control.manual import *
+import matplotlib.pyplot as plt 
 
-"""
-@GN0MIO: Este template serve como ponto de partida para a estruturação e desenvolvimento da sua simulação.
+# handles
+V_MAX = 0.5            # 0,5 m/s
+W_MAX = np.deg2rad(20) # 20 graus/s
 
-- setup(): Configuração inicial do cenário. Instancie seus robôs e sensores aqui.
-- post_start(): Executado logo após o início real da simulação. Ideal para capturar poses iniciais.
-- loop(t): Núcleo de execução contínua. Onde 't' é o tempo de simulação atual.
-- stop(): Rotina de encerramento para salvar logs, gráficos ou parar motores.
-"""
 
-class Mapeamento(BaseApp):
+# Aqui está a definição da classe que representa a simulação
+class turtleBot(BaseApp):
     """
-    Classe principal da simulação Mapeamento.
-    Gerencia o ciclo de vida da aplicação, integrando a lógica de controle com a cena do CoppeliaSim.
+        Teste de locomoção de obstáculos do robotino
     """
     def __init__(self):
-        """Inicializa os parâmetros base da aplicação, definindo a cena e o tempo total de simulação."""
-        super().__init__(scene_file="mapa.ttt", sim_name="Mapeamento", sim_time=120)
-        
-        # Uma lista para guardar quantos robôs o usuário criar
-        self.robots = [] 
+        """ Inicialização da aplicação"""
+        super().__init__(scene_file="turtleBot.ttt", sim_name="turtleBot", sim_time=120)
 
     def setup(self):
-        """Configura os recursos iniciais da simulação (instanciação de robôs, sensores e controladores)."""
-        try:
-            self.logger.info("Configuring Robot, Sensor and Controllers...")
+        """Configura os recurso da simulação"""
+        self.logger.info("Configuring Robot, Sensor and Controllers..")
 
-            # 1. Instanciar os Robôs
-            # meu_robo = Robotino(bridge=self.bridge, robot_name="robotino")
-            # self.robots.append(meu_robo) # Registra o robô para o handshake automático
-            
-            # 2. Instanciar sensores
-            # lidar = HokuyoSensorSim(self.bridge, f"/{{meu_robo.robot_name}}/fastHokuyo", True)
-            # meu_robo.add_sensor("LIDAR", lidar)
+        # Exemplo de adicionar um robô
+        self.robot = TurtleBot(bridge=self.bridge,
+                               robot_name='Turtlebot3', 
+                               left_motor='left_motor', 
+                               right_motor='right_motor',
+                               base_link='base_link'
+                              )
+        
+        # Sensores do robô
+        self.Lidar = LDS_02(bridge=self.bridge, base_name= 'Turtlebot3')
 
-            # 3. Faz o handshake com todos os robôs registrados
-            self.handshake()
+        self.robot.add_sensor(sensor_name='LIDAR',sensor_instance=self.Lidar)
 
-        except Exception as e:
-            self.logger.error(f"Error detected in setup()!\nTraceback:\n{traceback.format_exc()}")
-            
+        # AJUSTE 3: Handshake com o CoppeliaSim (NOVO)
+        monitor_paths = self.robot.get_monitor_paths()
+        actuator_paths = self.robot.get_actuator_paths()
+        self.bridge.initialize(monitor_paths, actuator_paths, self.sim)
+
+        # Controladores do robô
+        #Buffers para os pontos calculados
+        self.buffer = PointCloudAccumulator(max_point=100000)
+        
+        
+        # Definindo configurações para plota
+        self.define_plot_configs()
+
     def post_start(self):
-        """Executado uma única vez após o startSimulation(). Ideal para leituras iniciais."""
-        try:
-            # Exemplo: pos = self.robots[0].pose
-            return super().post_start()
-        except Exception as e:
-            self.logger.error(f"Error detected in post_start()!\nTraceback:\n{traceback.format_exc()}")
+        """ É executado logo quando inicia a simulação"""
+        super().post_start()
+        
+        # AJUSTE 4: Lemos a pose inicial aqui, pois a ponte já terá os dados no cache
+        pos = self.robot.pose
+        self.logger.info(f'Initial robot position: x={pos[0]:.2f}, y={pos[1]:.2f}')
 
-    def loop(self, t,actual_state=None):
-        """
-        Núcleo de execução contínua. 
-        Implemente aqui a lógica de controle principal, leitura de sensores e atualização de atuadores.
-        """
+    
+    def define_plot_configs(self):
+        """ Configurações de plot """
+        self.plot_counter = 0
+
+        plt.ion() #Ativa modo interativo
+        self.fig, self.ax = plt.subplots()
+        self.ax.set_aspect('equal')
+        self.ax.set_xlim(-5, 5)
+        self.ax.set_ylim(-5, 5)
+
+        self.plot_robot, = self.ax.plot([],[],'ro',label='Robô',zorder=5)
+        self.plot_lidar, = self.ax.plot([],[],'b.',markersize=1, label='Lidar')
+
+    def loop(self, t, actual_state=None):
+        """ Etapas do loop"""
         try:
-            # Adicione a lógica do loop aqui
-            pass 
-        except Exception as e:
-            self.logger.error(f"Error detected in loop()!\nTraceback:\n{traceback.format_exc()}")
+            #Puxa dados dos sensores e salva
+            data_sensor = self.robot.get_sensor(sensor_name='LIDAR').update() #Puxando dados do LIDAR
+            #self.buffer.add(data_sensor)
             
-    def handshake(self):
-        """Coleta caminhos de monitoramento de todos os robôs registrados e inicia a comunicação ZMQ."""
-        try: 
-            monitor_paths = []
-            actuator_paths = []
-            
-            for robot in self.robots:
-                monitor_paths.extend(robot.get_monitor_paths())
-                actuator_paths.extend(robot.get_actuator_paths())
-                
-            self.bridge.initialize(monitor_paths, actuator_paths, self.sim)
-            self.logger.info("Handshake with CoppeliaSim: OK!") 
+            self.plot_result(ds = data_sensor,
+                              robot = self.robot)
         except Exception as e:
-            self.logger.error(f"Error in Handshake with CoppeliaSim!\nTraceback:\n{traceback.format_exc()}") 
+            # CHAVES DUPLAS AQUI:
+            self.logger.error(f"Erro detected in loop(): {e}")
+    
+    def plot_result(self, ds, robot):
+            # --- Atualiza plot do lidar com limite de FPS ---
+            self.plot_counter += 1
+            #if self.plot_counter % 2 == 0:
+            lx = ds[:,0]
+            ly = ds[:,1]
+            self.plot_lidar.set_data(lx, ly)
+            
+            pos = robot.pose
+            self.plot_robot.set_data([pos[0]], [pos[1]])
+            self.fig.canvas.draw()
+            self.fig.canvas.flush_events()
 
     def stop(self):
-        """Rotina de encerramento para garantir a parada segura dos componentes e exportação de resultados."""
+        """ Executado após a simulação terminar - parada segura"""
         try:
-            # for robot in self.robots:
-            #     robot.stop()
-            pass
-        except Exception as e:
-            self.logger.error(f"Error detected in stop()!\nTraceback:\n{traceback.format_exc()}")
+            self.robot.stop()
 
+            plt.ioff()
+            plt.close(self.fig)
+            self.logger.debug(f"Buffer Usage: {self.buffer._total_count}")
+            
+        except Exception as e:
+            # CHAVES DUPLAS AQUI:
+            self.logger.error(f"Erro detected in stop(): {e}")
+    
 def app():
     """
-    Ponto de entrada principal da simulação. 
-    Instancia a classe e inicia o ciclo de vida (run) para integração com o gerenciador BRAINBYTE.
+        Ponto de entrada para a simulação em main.py
     """
-    aplicacao = Mapeamento()
+    aplicacao = turtleBot()
     aplicacao.run()
