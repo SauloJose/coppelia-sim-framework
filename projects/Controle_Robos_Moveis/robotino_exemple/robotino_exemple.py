@@ -1,6 +1,5 @@
 from brainbyte import BaseApp
 from brainbyte.robots.movel.Robotino import *
-from brainbyte.control.automatic import *
 
 
 class RobotinoSimu(BaseApp):

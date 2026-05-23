@@ -799,24 +799,21 @@ class brainGUI:
                 if platform.system() == 'Windows':
                     os.startfile(path_py_str)
                 elif platform.system() == 'Darwin':
-                    subprocess.Popen(('open', path_py_str))
+                    subprocess.call(('open', path_py_str))
                 else:
-                    subprocess.Popen(('xdg-open', path_py_str))
+                    subprocess.call(('xdg-open', path_py_str))
             except Exception as e:
                 self.logger.warning(f"Não foi possível abrir o arquivo: {e}")
 
             # Carrega cena no CoppeliaSim (se aberto)
-            if self._is_coppeliasim_running():
-                try:
-                    client = RemoteAPIClient()
-                    sim = client.require('sim')
-                    path_cena_str = str(caminho_nova_cena.resolve())
-                    sim.loadScene(path_cena_str)
-                    self.logger.info(f"Cena {arquivo_ttt} carregada com sucesso.")
-                except Exception as e:
-                    self.logger.warning(f"Falha ao carregar cena: {e}")
-            else:
-                self.logger.info("CoppeliaSim não está em execução – cena não carregada.")
+            try:
+                client = RemoteAPIClient()
+                sim = client.require('sim')
+                path_cena_str = str(caminho_nova_cena.resolve())
+                sim.loadScene(path_cena_str)
+                self.logger.info(f"Cena {arquivo_ttt} carregada com sucesso.")
+            except Exception as e:
+                self.logger.warning(f"CoppeliaSim não disponível para carregar cena: {e}")
 
         except Exception as e:
             msg = traceback.format_exc()

@@ -5,10 +5,6 @@
 - Configure synchronous mode
 - Execute `setup()` (once)
 - Iterate `loop(t)` until `sim_time` or interruption
-
-Comments:
-- This layer separates the control logic (in tests) from the simulation execution/control
-  mechanics, facilitating testing and reuse.
 """
 
 import os
@@ -18,7 +14,8 @@ import tempfile
 import subprocess
 import platform
 import shutil
-import keyboard
+import socket
+import traceback
 from coppeliasim_zmqremoteapi_client import RemoteAPIClient
 from brainbyte.core.paths import *
 from brainbyte.sensors import *
@@ -26,8 +23,17 @@ from brainbyte.robots import *
 from brainbyte.utils.logging import setup_logger
 from brainbyte.utils import *
 from brainbyte.core.bridge import SimulationBridge 
-import socket
-import traceback
+
+# Tenta importar o keyboard de forma segura para Linux/Windows
+try:
+    import keyboard
+    # No Linux, mesmo importando, precisamos testar se temos permissão de acesso
+    if platform.system() == 'Linux' and os.getuid() != 0:
+        HAS_KEYBOARD = False
+    else:
+        HAS_KEYBOARD = True
+except (ImportError, Exception):
+    HAS_KEYBOARD = False
     
 class BaseApp:
     """Base class providing the minimal lifecycle for a simulation application.
@@ -37,7 +43,7 @@ class BaseApp:
     def __init__(self, scene_file=None, 
                  sim_name=None, 
                  sim_time=10.0, 
-                 log_file =None):
+                 log_file=None):
         
         self.sim_name = sim_name
         self.scene_file = scene_file
@@ -51,7 +57,6 @@ class BaseApp:
         else:
             self._temp_log_file = None
 
-        # Warn the user BEFORE the code potentially hangs
         self.logger = setup_logger(__name__, '[MAIN]', log_file=LOG_APP_FILE)
         self.log_file = log_file
         
@@ -63,7 +68,6 @@ class BaseApp:
             sys.exit(1)
 
         try:
-            # The code will "freeze" here if the simulator is closed
             self.client = RemoteAPIClient()
             self.sim = self.client.require('sim')
 
@@ -73,7 +77,6 @@ class BaseApp:
                 self.sim.stopSimulation()
                 time.sleep(1)
 
-            # If execution reaches this point, the connection was successful!
             self.logger.info("Successfully connected to the simulator!")
             
         except Exception as e:
@@ -82,20 +85,13 @@ class BaseApp:
             sys.exit(1)
             
     def _wait_for_simulator(self, host='localhost', port=23000, timeout=10.0):
-        """
-        Tenta estabelecer uma conexão TCP simples para verificar se o simulador está online.
-        Pinga a porta a cada 0.5 segundos até o tempo limite acabar.
-        """
         start_time = time.time()
         while time.time() - start_time < timeout:
             try:
-                # Tenta criar uma conexão. O timeout de 0.5 impede que fique preso.
                 with socket.create_connection((host, port), timeout=0.5):
                     return True
             except (ConnectionRefusedError, socket.timeout, OSError):
-                # Se a porta estiver fechada, espera meio segundo e tenta de novo
                 time.sleep(0.5)
-        
         return False
     
     def run(self):
@@ -107,16 +103,36 @@ class BaseApp:
                     base_dir = os.path.dirname(os.path.abspath(child_module.__file__))
                 except (KeyError, AttributeError):
                     base_dir = os.getcwd()
-
-                scene_path = os.path.join(base_dir, self.scene_file)
-
+    
+                # os.path.abspath garante a limpeza de barras redundantes do SO atual
+                scene_path = os.path.abspath(os.path.join(base_dir, self.scene_file))
+                
                 if not os.path.exists(scene_path):
                     raise FileNotFoundError(f"Scene not found: {scene_path}")
+                
                 self.logger.info(f"Loading scene: {self.scene_file}...")
-                self.sim.loadScene(scene_path) 
-            
+                
+                # --- AJUSTE MULTIPLATAFORMA / DUALBOOT (Z:/) ---
+                try:
+                    # Tenta carregar o caminho padrão (Funciona nativo no Windows e Linux comum)
+                    self.sim.loadScene(scene_path)
+                except Exception as e:
+                    # Se falhar no Linux, tenta a conversão para o drive virtual Z: (Wine/Partições NTFS)
+                    if platform.system() == 'Linux':
+                        self.logger.warning("Native Linux path failed in CoppeliaSim. Trying Z:\\ drive mapping...")
+                        mapped_path = "Z:" + scene_path.replace("/", "\\")
+                        try:
+                            self.sim.loadScene(mapped_path)
+                            self.logger.info(f"Successfully loaded scene using mapped path: {mapped_path}")
+                        except Exception:
+                            # Se a gambiarra também falhar, joga o erro original na tela
+                            raise e
+                    else:
+                        raise e
+                # -----------------------------------------------
+
             self.logger.info("Starting simulation...")
-            self.sim.startSimulation() 
+            self.sim.startSimulation()
  
             time.sleep(0.5)
             
@@ -163,47 +179,30 @@ class BaseApp:
                 pass
     # Fetch standard information 
     def d_time(self):
-        """
-        Returns the simulation time step.
-        """
         return self.sim.getSimulationTimeStep()
     
     @property
     def dt(self):
-        """
-        Propriedade que chama dinamicamente self.d_time().
-        Permite acessar o tempo de simulação usando apenas self.dt nas classes filhas.
-        """
         return self.d_time()
     
     def simu_time(self):
-        """
-        Returns the current simulation time.
-        """
         return self.sim.getSimulationTime()
     
     @property
     def st(self):
-        """
-        Propriedade que chama dinamicamente self.d_time().
-        Permite acessar o tempo de simulação usando apenas self.dt nas classes filhas.
-        """
         return self.simu_time()
+
     # ==========================================
     # METHODS TO BE OVERRIDDEN IN CHILD CLASSES
     # ==========================================
     def setup(self):
-        """Executed once BEFORE the simulation starts (ideal for fetching handles)."""
         pass
 
     def post_start(self):
-        """Executed right after startSimulation() (ideal for initial sensor capture)."""
         pass
 
-    def loop(self, t, actual_state = None): 
-        """Executed at each simulation step (ideal for control logic and reading sensors)."""
+    def loop(self, t, actual_state=None): 
         pass
 
     def stop(self):
-        """Executed after the simulation finishes."""
         pass

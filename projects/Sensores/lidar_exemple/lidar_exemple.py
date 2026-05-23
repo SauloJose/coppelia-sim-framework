@@ -16,7 +16,7 @@ import logging
 
 from brainbyte import BaseApp
 from brainbyte.sensors import HokuyoSensorSim
-from brainbyte.robots.movel.PioneerBot import PioneerBot
+from brainbyte.robots.movel.pioneerBot import PioneerBot
 import os 
 
 plt.ion()
