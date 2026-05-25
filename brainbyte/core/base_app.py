@@ -151,7 +151,7 @@ class BaseApp:
                 
                 # Executa a lógica customizada da classe filha
                 self.loop(t=t, actual_state=current_state)
-
+            self.logger.info(f"Simulation arrived on time limit of {self.sim_time} seconds... The simulation will stopping now.")
         except Exception as e:
             msg = traceback.format_exc()
             self.logger.exception(f"Unexpected error in run() from BaseApp: {e}\n => Traceback: \n\n{msg}")

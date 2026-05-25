@@ -34,6 +34,14 @@ class PathPlanning(BaseApp):
         self.Lidar = LDS_02(bridge=self.bridge, base_name='Turtlebot3')
         self.robot.add_sensor(sensor_name='LIDAR', sensor_instance=self.Lidar)
 
+
+        monitor_paths = self.robot.get_monitor_paths()
+        actuator_paths = self.robot.get_actuator_paths()
+        self.bridge.initialize(monitor_paths, actuator_paths, self.sim)
+
+        #self.buffer = PointCloudAccumulator(max_point=100000)
+        
+        # O define_plot_configs precisa rodar antes de qualquer clique para criar o marcador visual
         # =======================================================================================
         position = self.robot.pose
         self.target_point = np.array([position[0], position[1], position[2]])
@@ -49,16 +57,7 @@ class PathPlanning(BaseApp):
         self.robot.add_control(control_name='AUTO_DIFF',
                                    control_instance=self.control)
         # =======================================================================================
-
-        monitor_paths = self.robot.get_monitor_paths()
-        actuator_paths = self.robot.get_actuator_paths()
-        self.bridge.initialize(monitor_paths, actuator_paths, self.sim)
-
-        self.buffer = PointCloudAccumulator(max_point=100000)
-        
-        # O define_plot_configs precisa rodar antes de qualquer clique para criar o marcador visual
         self.define_plot_configs()
-
         self.command_lines()
 
     def on_map_click(self, event):
@@ -88,9 +87,14 @@ class PathPlanning(BaseApp):
 
     def post_start(self):
         super().post_start()
-        
+        self.bridge.step() #Forçar atualização.
+
+        #=====================================================================================================================
         pos = self.robot.pose
         self.logger.info(f'Initial robot position: x={pos[0]:.2f}, y={pos[1]:.2f}, theta ={np.rad2deg(pos[2]):.2f}')
+        self.target_point = pos 
+        self.control.set_point = self.target_point
+        #=====================================================================================================================
 
         # 1. Puxa o raio dinamicamente usando a função externa 
         self.bot_radius = get_robot_radius(self.sim, 'Turtlebot3/base_link')
@@ -156,10 +160,10 @@ class PathPlanning(BaseApp):
         # Mantemos o ponto central apenas para destacar o centro do robô
         self.plot_robot_center, = self.ax.plot([], [], 'ro', markersize=4, zorder=6)
         
-        # CORREÇÃO: Inicializando o marcador do objetivo para evitar erro de escopo no clique
+        # Inicializando o marcador do objetivo para evitar erro de escopo no clique
         self.plot_target_marker, = self.ax.plot(
             [self.target_point[0]], [self.target_point[1]], 
-            'g*', markersize=12, label='Objetivo Atual', zorder=7
+            'g.', markersize=12, label='Objetivo Atual', zorder=7
         )
         
         # Plot do Lidar para debug
@@ -173,11 +177,12 @@ class PathPlanning(BaseApp):
             # Captura a nuvem de pontos atual do sensor
             data_sensor = self.robot.get_sensor(sensor_name='LIDAR').update() 
             
-            if data_sensor is not None and data_sensor.size > 0:
-                self.buffer.add(data_sensor)
+            #if data_sensor is not None and data_sensor.size > 0:
+            #    self.buffer.add(data_sensor)
             
-            accumulated_points = self.buffer.get_all()
-            
+            #accumulated_points = self.buffer.get_all()
+            accumulated_points = data_sensor 
+
             # --- ATIVAÇÃO DO CONTROLADOR ---
             # Calcula os comandos de velocidades angular (w) e linear (v) baseado na pose atual
             actual_pos = self.robot.pose 
