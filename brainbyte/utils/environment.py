@@ -1,11 +1,14 @@
 import numpy as np
+from shapely.geometry import Polygon as ShapelyPolygon
 
-def get_environment_obstacles(sim, botname=['turtlebot', 'robot'], keywords=['block', 'pillar', 'wall', 'cuboid', 'parede', 'pilar']):
+def get_environment_obstacles(sim, robot_radius=0.0, botname=['turtlebot', 'robot'], keywords=['block', 'pillar', 'wall', 'cuboid', 'parede', 'pilar']):
     """
-    Busca todas as formas geométricas estáticas da cena do CoppeliaSim.
+    Busca todas as formas geométricas estáticas da cena do CoppeliaSim V4.1.
+    Se 'robot_radius' for maior que zero, realiza a Soma de Minkowski para inflar os obstáculos.
     
     Retorna:
-        Uma lista de dicionários contendo a posição, dimensões e rotação (em radianos) de cada objeto.
+        Uma lista de dicionários contendo a posição, dimensões, rotação, vértices originais
+         e os vértices inflados (C-Space).
     """
     obstacles_data = []
     
@@ -25,28 +28,58 @@ def get_environment_obstacles(sim, botname=['turtlebot', 'robot'], keywords=['bl
             if any(kw in alias for kw in keywords):
                 pos = sim.getObjectPosition(handle, -1)
                 ori = sim.getObjectOrientation(handle, -1)
-                angle_rad = ori[2] # Mantém em radianos para evitar conversões redundantes
+                angle_rad = ori[2] # Mantém em radianos
                 
                 # Valores padrão de fallback
                 width, height = 0.5, 0.5 
                 
                 try:
+                    # Suporte para CoppeliaSim V4.1 (Verificação manual de limites)
+                    def read_param(param_id):
+                        val = sim.getObjectFloatParameter(handle, param_id)
+                        return val[1] if isinstance(val, (tuple, list)) else val
 
-                    # Retorna (size, pose), onde size é [sizeX, sizeY, sizeZ]
-                    size, _ = sim.getShapeBB(handle)
-                    if size:
-                        width = size[0]  # Dimensão X
-                        height = size[1] # Dimensão Y
+                    max_x = read_param(sim.objfloatparam_objbbox_max_x)
+                    min_x = read_param(sim.objfloatparam_objbbox_min_x)
+                    max_y = read_param(sim.objfloatparam_objbbox_max_y)
+                    min_y = read_param(sim.objfloatparam_objbbox_min_y)
+
+                    width = max_x - min_x
+                    height = max_y - min_y
                 except Exception:
                     if 'wall' in alias or 'parede' in alias:
                         width, height = 2.0, 0.1
                 
+                # Monta a estrutura temporária para extrair os cantos originais
+                raw_obs = {
+                    'x': pos[0], 'y': pos[1],
+                    'w': width, 'h': height,
+                    'angle': angle_rad
+                }
+                
+                # 1. Calcula os vértices originais rotacionados
+                original_corners = get_obb_corners(raw_obs)
+                inflated_corners = original_corners # Por padrão, se não inflar, são iguais
+                
+                # 2. SE o raio do robô for passado, aplica a Soma de Minkowski usando Shapely
+                if robot_radius > 0.0:
+                    try:
+                        shapely_poly = ShapelyPolygon(original_corners)
+                        # join_style=2 mantém as quinas o mais retas/quadradas possível
+                        inflated_poly = shapely_poly.buffer(robot_radius, join_style=2)
+                        inflated_corners = list(inflated_poly.exterior.coords)
+                    except Exception as e:
+                        print(f"[WARNING] Erro ao inflar obstáculo {alias}: {e}")
+                
+                # Guarda o dicionário completo com geometria pura e geometria C-Space
                 obstacles_data.append({
                     'x': pos[0],
                     'y': pos[1],
                     'w': width,
                     'h': height,
-                    'angle': angle_rad # Salvando diretamente em radianos
+                    'angle': angle_rad,
+                    'corners_originals': original_corners,
+                    'corners': inflated_corners # <--- O algoritmo usará este campo sempre!
                 })
                 
     except Exception as e:
@@ -55,7 +88,6 @@ def get_environment_obstacles(sim, botname=['turtlebot', 'robot'], keywords=['bl
     return obstacles_data
 
 def get_obb_corners(obs):
-    # OBS: O ângulo agora já chega diretamente em radianos
     theta = obs['angle']
     cos_t = np.cos(theta)
     sin_t = np.sin(theta)
@@ -80,32 +112,30 @@ def get_obb_corners(obs):
     
     return corners.tolist()
 
-
 def get_robot_radius(sim, base_shape_name='Turtlebot3/base_link'):
     """
-    Busca o handle da carcaça principal do robô e calcula o raio do círculo
-    que engloba perfeitamente o robô (Bounding Circle).
+    Busca as dimensões da carcaça no V4.1 e calcula o raio do círculo circunscrito.
     """
     try:
-        # Pega o ID (handle) apenas da forma geométrica da base do robô
         robot_handle = sim.getObject(f'/{base_shape_name}')
         
-        # Pega as dimensões X, Y, Z da Bounding Box dessa peça
-        size, _ = sim.getShapeBB(robot_handle)
+        def read_param(param_id):
+            val = sim.getObjectFloatParameter(robot_handle, param_id)
+            return val[1] if isinstance(val, (tuple, list)) else val
+
+        max_x = read_param(sim.objfloatparam_objbbox_max_x)
+        min_x = read_param(sim.objfloatparam_objbbox_min_x)
+        max_y = read_param(sim.objfloatparam_objbbox_max_y)
+        min_y = read_param(sim.objfloatparam_objbbox_min_y)
+
+        w = max_x - min_x
+        h = max_y - min_y
         
-        if size:
-            w = size[0]
-            h = size[1]
-            
-            # Calcula o raio do círculo circunscrito para cobrir as quinas
-            # R = sqrt((w/2)^2 + (h/2)^2)
-            radius = np.sqrt((w / 2.0)**2 + (h / 2.0)**2)
-            
-            print(f"[INFO] Dimensões do robô obtidas: w={w:.3f}m, h={h:.3f}m -> Raio Seguro={radius:.3f}m")
-            return radius
+        radius = np.sqrt((w / 2.0)**2 + (h / 2.0)**2)
+        print(f"[INFO] Dimensões do robô (V4.1): w={w:.3f}m, h={h:.3f}m -> Raio Seguro={radius:.3f}m")
+        return radius
             
     except Exception as e:
         print(f"[ERROR] Erro ao obter dimensões do robô: {e}")
         
-    # Fallback genérico caso a leitura falhe (ex: 15cm para um Turtlebot padrão)
     return 0.15

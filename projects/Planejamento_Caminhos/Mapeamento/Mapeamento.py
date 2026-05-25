@@ -54,47 +54,48 @@ class PathPlanning(BaseApp):
         pos = self.robot.pose
         self.logger.info(f'Initial robot position: x={pos[0]:.2f}, y={pos[1]:.2f}')
 
-        # Puxando as dimensões do robô
-        self.bot_radius, _ = self.robot.dimensions
-        self.bot_radius = self.bot_radius/2 +0.03  #Dando uma folga
+        # 1. Puxa o raio dinamicamente usando a função externa corrigida para V4.1
+        self.bot_radius = get_robot_radius(self.sim, 'Turtlebot3/base_link')
+        self.bot_radius += 0.03  # Adiciona a folga desejada
 
-        #Atualizo o plot
-        self.plot_robot_body.set_radius(self.bot_radius)
+        # Desenha o robô
+        self.plot_robot_body = patches.Circle(
+            (pos[0], pos[1]), radius=self.bot_radius,
+            edgecolor='r', facecolor='none', linewidth=2, label='Contorno do Robô', zorder=5
+        )
+        self.ax.add_patch(self.plot_robot_body)
+        self.ax.legend(loc='upper right')
 
-        # Chamada da função externa passando a API do CoppeliaSim
-        raw_obstacles = get_environment_obstacles(self.sim)
+        # 2. CHAMADA REUTILIZÁVEL: Passamos o raio do robô direto como argumento!
+        # A função externa agora se encarrega de calcular as somas de Minkowski automaticamente.
+        self.obstacles_data = get_environment_obstacles(self.sim, robot_radius=self.bot_radius)
         
-        # Informações dos obstáculos
-        self.obstacles_data = []
+        # 3. Renderização simples na tela
+        for obs in self.obstacles_data:
+            # Desenha a zona de colisão INFLADA (C-Space) em vermelho bem suave
+            polygon_inflated = patches.Polygon(
+                obs['corners'], 
+                closed=True,
+                linewidth=1.2, 
+                edgecolor='red', 
+                facecolor='red',
+                alpha=0.15,
+                linestyle='--',
+                zorder=2
+            )
+            self.ax.add_patch(polygon_inflated)
 
-        # Renderização estática do mapa de obstáculos
-        for obs in raw_obstacles:
-            #Extraindo extremos rotacionados
-            corners = get_obb_corners(obs)
-
-            # Salvando informações dos obstáculos
-            self.obstacles_data.append(
-                {
-                    'center_x':obs['x'],
-                    'center_y':obs['y'],
-                    'w':obs['w'],
-                    'h':obs['h'],
-                    'angle':obs['angle'],
-                    'coorners':corners
-                })
-            
-            # Renderizando no Matplotlib
-            polygon = patches.Polygon(
-                corners, 
+            # Desenha o obstáculo REAL/FÍSICO por cima em cinza escuro
+            polygon_real = patches.Polygon(
+                obs['corners_originals'], 
                 closed=True,
                 linewidth=1.5, 
                 edgecolor='#333333', 
-                facecolor='#999999',
-                alpha=0.8,
-                zorder=2
+                facecolor='#666666',
+                alpha=0.9,
+                zorder=3
             )
-            self.ax.add_patch(polygon)
-
+            self.ax.add_patch(polygon_real)
     def define_plot_configs(self):
         plt.ion() 
         self.fig, self.ax = plt.subplots(figsize=(8, 8))
@@ -106,14 +107,6 @@ class PathPlanning(BaseApp):
         self.ax.set_xlabel("X (metros)")
         self.ax.set_ylabel("Y (metros)")
         self.ax.grid(True, linestyle='--', alpha=0.5, zorder=0)
-
-        # círculo do corpo do robô com raio 0 inicial (será atualizado depois)
-        self.plot_robot_body = patches.Circle(
-            (0, 0), radius=0.1, 
-            edgecolor='r', facecolor='none', 
-            linewidth=2, label='Contorno do Robô', zorder=5
-        )
-        self.ax.add_patch(self.plot_robot_body)
 
         # Mantemos o ponto central apenas para destacar o centro do robô
         self.plot_robot_center, = self.ax.plot([], [], 'ro', markersize=4, zorder=6)
@@ -128,7 +121,6 @@ class PathPlanning(BaseApp):
             # Captura a nuvem de pontos atual do sensor (Frame atual)
             data_sensor = self.robot.get_sensor(sensor_name='LIDAR').update() 
             
-            # CORREÇÃO 2: Alimenta o acumulador de nuvem de pontos para não perder o histórico
             if data_sensor is not None and data_sensor.size > 0:
                 self.buffer.add(data_sensor)
             
@@ -151,7 +143,7 @@ class PathPlanning(BaseApp):
         # Captura a posição real atual do robô
         pos = robot.pose
         
-        # ATUALIZAÇÃO: Move o círculo vermelho para a nova coordenada central (x, y)
+        # Move o círculo vermelho para a nova coordenada central (x, y)
         self.plot_robot_body.set_center((pos[0], pos[1]))
         
         # Atualiza o ponto central discretamente
