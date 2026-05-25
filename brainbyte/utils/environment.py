@@ -79,7 +79,7 @@ def get_environment_obstacles(sim, robot_radius=0.0, botname=['turtlebot', 'robo
                     'h': height,
                     'angle': angle_rad,
                     'corners_originals': original_corners,
-                    'corners': inflated_corners # <--- O algoritmo usará este campo sempre!
+                    'corners': inflated_corners
                 })
                 
     except Exception as e:

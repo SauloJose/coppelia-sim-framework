@@ -66,12 +66,12 @@ class PathPlanning(BaseApp):
         self.ax.add_patch(self.plot_robot_body)
         self.ax.legend(loc='upper right')
 
-        # 2. CHAMADA REUTILIZÁVEL: Passamos o raio do robô direto como argumento!
         # A função externa agora se encarrega de calcular as somas de Minkowski automaticamente.
         self.obstacles_data = get_environment_obstacles(self.sim, robot_radius=self.bot_radius)
         
         # 3. Renderização simples na tela
         for obs in self.obstacles_data:
+
             # Desenha a zona de colisão INFLADA (C-Space) em vermelho bem suave
             polygon_inflated = patches.Polygon(
                 obs['corners'], 
@@ -96,6 +96,7 @@ class PathPlanning(BaseApp):
                 zorder=3
             )
             self.ax.add_patch(polygon_real)
+
     def define_plot_configs(self):
         plt.ion() 
         self.fig, self.ax = plt.subplots(figsize=(8, 8))
