@@ -60,7 +60,6 @@ class LDS_02(BaseSensor):
     def _read_lidar(self):
         """Read all points of the PointCloud in the local frame sensor directly from Bridge cache."""
         
-        # ADICIONADO O '_bin' AQUI NO FINAL DA STRING:
         raw_points = self.bridge.get_sensor_data(f"{self._point_cloud_path}_ptcloud_bin")
         
         if raw_points is None or len(raw_points) == 0:
@@ -78,20 +77,28 @@ class LDS_02(BaseSensor):
             self._last_points_world = points
             return points
         
-        # Pega a matriz de transformação (já processada no frame atual) sem chamar a rede
+        # get the homography matrix from Coppelia.
         m = self.bridge.get_sensor_data(f"{self._lidar_path}_matrix")
         if m is None:
             return points # Fallback de segurança
 
+        # building the homography matrix
+        # m = [R T]  -> Convert the robot coordenate to real world coordenate.
+        # In this line I want to convert m in homogêneos coordenates
+        # mh = [R       T] 
+        #      [[0,0,0] 1] => Projection.
         h_matrix = np.array(m).reshape(3, 4)
         h_matrix = np.vstack([h_matrix, [0, 0, 0, 1]])
 
         # Convert points to homogeneous coordinates
-        ones = np.ones((points.shape[0], 1))
-        points_homo = np.hstack([points, ones])
+        # P = [x,y,z]^t => P=[x,y,z,1]^t
+        ones = np.ones((points.shape[0], 1))  
+        points_homo = np.hstack([points, ones]) 
 
         # Transform: P_world = H @ P_local
-        points_world_homo = (h_matrix @ points_homo.T).T
+        # Obs: Points (N,4) => Points.T (4,N) (Now we applie H_matrix to each points)
+        # at finally get the (N,4) points again.
+        points_world_homo = (h_matrix @ points_homo.T).T 
         
         self._last_points_world = points_world_homo[:, :3]
         return self._last_points_world
@@ -104,6 +111,12 @@ class LDS_02(BaseSensor):
         local_pts = self._read_lidar()
         world_pts = self._transform_to_world(local_pts)
         return world_pts
+    
+    def read_lidar_local(self):
+        """
+        Get the point cloud in the robot coordinates.
+        """
+        return self._read_lidar()
     
     def get_cloud_points(self, world_coordinates=True):
         """
