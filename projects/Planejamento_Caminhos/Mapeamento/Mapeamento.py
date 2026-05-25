@@ -94,9 +94,11 @@ class PathPlanning(BaseApp):
         self.logger.info(f'Initial robot position: x={pos[0]:.2f}, y={pos[1]:.2f}, theta ={np.rad2deg(pos[2]):.2f}')
         self.target_point = pos 
         self.control.set_point = self.target_point
+        self.plot_target_marker.set_data([self.target_point[0]], 
+                                         [self.target_point[1]])
         #=====================================================================================================================
 
-        # 1. Puxa o raio dinamicamente usando a função externa 
+        # Puxa o raio dinamicamente usando a função externa 
         self.bot_radius = get_robot_radius(self.sim, 'Turtlebot3/base_link')
 
         # Desenha o robô
@@ -118,32 +120,63 @@ class PathPlanning(BaseApp):
         self.ax.legend(loc='upper right')
 
         # Calcula automaticamente as somas de Minkowski
-        self.obstacles_data = get_environment_obstacles(self.sim, robot_radius=self.bot_radius)
+        self.obstacles_data, self.boundary_vertices = get_environment_obstacles(
+            self.sim, 
+            robot_radius=self.bot_radius,
+            wall_keywords=['cuboid'] 
+        )
         
-        # Renderização de obstáculos
+        # Renderização de obstáculos internos (Pilares, blocos, etc.)
         for obs in self.obstacles_data:
             polygon_inflated = patches.Polygon(
-                obs['corners'], 
-                closed=True,
-                linewidth=1.2, 
-                edgecolor='red', 
-                facecolor='red',
-                alpha=0.15,
-                linestyle='--',
-                zorder=2
+                obs['corners'], closed=True, linewidth=1.2, 
+                edgecolor='red', facecolor='red', alpha=0.15, linestyle='--', zorder=2
             )
             self.ax.add_patch(polygon_inflated)
 
             polygon_real = patches.Polygon(
-                obs['corners_originals'], 
-                closed=True,
-                linewidth=1.5, 
-                edgecolor='#333333', 
-                facecolor='#666666',
-                alpha=0.9,
-                zorder=3
+                obs['corners_originals'], closed=True, linewidth=1.5, 
+                edgecolor='#333333', facecolor='#666666', alpha=0.9, zorder=3
             )
             self.ax.add_patch(polygon_real)
+
+            # Plota os vértices dos obstáculos para debug
+            #corners_inf = np.array(obs['corners'])
+            #self.ax.scatter(
+            #    corners_inf[:, 0], corners_inf[:, 1], 
+            #    color='red', marker='x', s=20, zorder=4
+            #)
+
+        # Renderização do Retângulo Interno Útil (Paredes)
+        if self.boundary_vertices:
+            boundary_np = np.array(self.boundary_vertices)
+            
+            # Desenha a linha limite que o robô não pode cruzar (C-Space da parede)
+            polygon_boundary = patches.Polygon(
+                boundary_np,
+                closed=True,
+                linewidth=4,
+                edgecolor="#000000",  # Linha verde para indicar o limite seguro interno
+                facecolor='none',
+                linestyle='-',
+                label='Limite da Área Útil',
+                zorder=3
+            )
+            self.ax.add_patch(polygon_boundary)
+            
+            # Plota os vértices específicos que você quer usar para a sua discretização
+            self.ax.scatter(
+                boundary_np[:, 0], boundary_np[:, 1],
+                color='#00AA55',
+                marker='s',          # Marcador quadrado para diferenciar dos obstáculos
+                s=50,                # Tamanho maior para destacar bem
+                label='Vértices Discretização',
+                zorder=4
+            )
+
+        # Atualiza a legenda para incluir as novas marcações da parede
+        self.ax.legend(loc='upper right')
+            
 
     def define_plot_configs(self):
         plt.ion() 
