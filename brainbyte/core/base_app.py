@@ -99,6 +99,16 @@ class BaseApp:
         return False
     
     def run(self):
+        import signal 
+
+        self.is_running = True
+
+        def handle_sigint(sig, frame):
+            self.logger.warning("\n[SIGNAL] Ctrl+C detected. Cleaning up and exiting the loop...")
+            self.is_running = False
+
+        # Override the OS-level interrupt signal (SIGINT) with our custom handler
+        signal.signal(signal.SIGINT, handle_sigint)
         try:
             # Load scene
             if self.scene_file:
@@ -135,15 +145,13 @@ class BaseApp:
             self.logger.info("Simulation loop started. Press Ctrl+C in terminal to interrupt.")
 
             # Loop principal corrigido (Apenas 1 step por iteração)
-            while t < self.sim_time:
+            while t < self.sim_time and self.is_running:
                 current_state = self.bridge.step()
                 t = current_state.get('sim_time', t + self.dt)
                 
                 # Executa a lógica customizada da classe filha
                 self.loop(t=t, actual_state=current_state)
 
-        except KeyboardInterrupt:
-            self.logger.warning("\nSimulation manually interrupted from terminal (Ctrl+C).")
         except Exception as e:
             msg = traceback.format_exc()
             self.logger.exception(f"Unexpected error in run() from BaseApp: {e}\n => Traceback: \n\n{msg}")
@@ -161,6 +169,7 @@ class BaseApp:
                 self.logger.info("Simulation was sucessfull finished")
             except Exception:
                 pass
+
     # Fetch standard information 
     def d_time(self):
         """
