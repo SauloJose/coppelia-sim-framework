@@ -132,10 +132,9 @@ def get_robot_radius(sim, base_shape_name='Turtlebot3/base_link'):
         h = max_y - min_y
         
         radius = np.sqrt((w / 2.0)**2 + (h / 2.0)**2)
-        print(f"[INFO] Dimensões do robô (V4.1): w={w:.3f}m, h={h:.3f}m -> Raio Seguro={radius:.3f}m")
         return radius
             
     except Exception as e:
-        print(f"[ERROR] Erro ao obter dimensões do robô: {e}")
+        return -1
         
     return 0.15
