@@ -131,6 +131,45 @@ class LDS_02(BaseSensor):
         """
         return self._last_points_world if world_coordinates else self._last_points_local
     
+    def get_cloud_points_sectores(self):
+        """
+        Returns the local point cloud divided into real geometric sectors.
+
+        Even if the sensor fails or omits readings, the sectors remain accurate.
+
+        Returns:
+
+        left (np.ndarray): Matrix (M, 3) with points in the left sector.
+        front (np.ndarray): Matrix (K, 3) with points in the front cone.
+        right (np.ndarray): Matrix (P, 3) with points in the right sector.
+        back (np.ndarray): Matrix (Q, 3) with points in the back sector.
+        """
+        local_pts = self._read_lidar()
+        
+        if local_pts is None or local_pts.size == 0:
+            empty = np.empty((0, 3))
+            return empty, empty, empty, empty
+
+        x = local_pts[:, 0]
+        y = local_pts[:, 1]
+
+        # Arc tangent calculates heading angle in radians [-pi, pi]
+        angles = np.arctan2(y, x)
+
+        # Boolean masks matching specific geometric fields of view
+        mask_front = (angles > np.deg2rad(-15)) & (angles < np.deg2rad(15))
+        mask_left  = (angles >= np.deg2rad(15)) & (angles <= np.deg2rad(150))
+        mask_right = (angles >= np.deg2rad(-150)) & (angles <= np.deg2rad(-15))
+        mask_back  = (angles > np.deg2rad(150)) | (angles < np.deg2rad(-150))
+
+        # Array slicing using boolean masks
+        front = local_pts[mask_front]
+        left  = local_pts[mask_left]
+        right = local_pts[mask_right]
+        back  = local_pts[mask_back]
+
+        return left, front, right, back
+
     # Getters e Setters
     @property
     def is_range_data(self):

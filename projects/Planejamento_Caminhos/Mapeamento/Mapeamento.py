@@ -120,7 +120,7 @@ class PathPlanning(BaseApp):
         self.ax.legend(loc='upper right')
 
         # Calcula automaticamente as somas de Minkowski
-        self.obstacles_data, self.boundary_vertices = get_environment_obstacles(
+        self.obstacles_data, self.boundary_vertices,_ = get_environment_obstacles(
             self.sim, 
             robot_radius=self.bot_radius,
             wall_keywords=['cuboid'] 

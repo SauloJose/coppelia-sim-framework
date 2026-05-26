@@ -14,6 +14,7 @@ def get_environment_obstacles(sim, robot_radius=0.0,
     Retorna:
         obstacles_data (list): Lista de dicionários dos obstáculos internos inflados.
         boundary_vertices (list): Vértices [[x,y], ...] da área interna útil pronta para discretização.
+        wall_polygons (list): Lista de dicionários dos objetos que compõem a parede.
     """
     obstacles_data = []
     wall_polygons = []
@@ -115,7 +116,7 @@ def get_environment_obstacles(sim, robot_radius=0.0,
     except Exception as e:
         print(f"[ERROR] Erro ao mapear cenário no módulo externo: {e}")
         
-    return obstacles_data, boundary_vertices
+    return obstacles_data, boundary_vertices, wall_polygons
 
 def get_obb_corners(obs):
     theta = obs['angle']
