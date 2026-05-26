@@ -1,24 +1,11 @@
-# path_planner.py
-import numpy as np 
 from pathfinding.core.diagonal_movement import DiagonalMovement
 from pathfinding.core.grid import Grid
 from pathfinding.finder.a_star import AStarFinder
+import numpy as np 
 
 def astar(grid_map, start_world, goal_world):
-    """
-    Executa a busca A* e retorna o caminho em coordenadas reais do mundo (metros).
-    """
-    # Evita que o robô tente planejar se o grid não estiver inicializado
-    if grid_map is None:
-        return None
-
     start_row, start_col = grid_map.world_to_grid(start_world[0], start_world[1])
     goal_row, goal_col = grid_map.world_to_grid(goal_world[0], goal_world[1])
-    
-    # Validação de segurança: se o destino clicado for um obstáculo, aborta
-    if grid_map.matrix[goal_row, goal_col] == 1:
-        print("AVISO: Destino está obstruído por um obstáculo!")
-        return None
     
     # O pacote 'pathfinding' inverte a lógica: 1 é livre, 0 é obstáculo
     inverse_matrix = np.where(grid_map.matrix == 1, 0, 1)
@@ -33,7 +20,7 @@ def astar(grid_map, start_world, goal_world):
     finder = AStarFinder(diagonal_movement=DiagonalMovement.always)
     path, runs = finder.find_path(start_node, end_node, grid)
     
-    if not path or len(path) == 0:
+    if not path:
         return None
         
     # Converte de volta para metros
