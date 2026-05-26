@@ -47,9 +47,9 @@ class PathPlanning(BaseApp):
         
         self.control = DifferentialController(pos_init=position,
                                               set_point=self.target_point,
-                                              k_alpha=0.9,
-                                              k_beta=-0.0,
-                                              k_rho=0.8,
+                                              k_alpha=1.2,
+                                              k_beta=-0.05,
+                                              k_rho=0.3,
                                               dt=self.dt)  
 
         self.control.set_max_values(v_max=self.robot._v_max*2/3, w_max=self.robot._w_max)
@@ -162,7 +162,7 @@ class PathPlanning(BaseApp):
         self.ax.set_ylim(y_min - 0.5, y_max + 0.5)
 
         # Instancia e constrói a matriz de células
-        self.grid_map = GridMap(x_min=x_min, x_max=x_max, y_min=y_min, y_max=y_max, cell_size=0.2)
+        self.grid_map = GridMap(x_min=x_min, x_max=x_max, y_min=y_min, y_max=y_max, cell_size=0.1)
         
         self.logger.info("Discretizando ambiente em Grid de Ocupação...")
         self.grid_map.build_grid(self.obstacles_data)
