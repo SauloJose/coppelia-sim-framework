@@ -498,7 +498,7 @@ class SimpleController:
         self.v_max = v_max
         self.w_max = w_max
 
-    def compute(self, actual_pos, target_point):
+    def get_control(self, actual_pos, target_point):
         """Calcula comandos simples focados estritamente em avançar de frente."""
         self.set_point = np.asarray(target_point)
         

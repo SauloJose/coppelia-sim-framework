@@ -4,39 +4,56 @@ from pathfinding.core.diagonal_movement import DiagonalMovement
 from pathfinding.core.grid import Grid
 from pathfinding.finder.a_star import AStarFinder
 
+def simplify_path(full_path):
+    """
+    Filters the A* path keeping only the start, end, and turning points.
+    """
+    if full_path is None or len(full_path) <= 2:
+        return full_path
+
+    simplified_path = [full_path[0]]
+
+    for i in range(1, len(full_path) - 1):
+        v1 = full_path[i] - full_path[i-1]
+        v2 = full_path[i+1] - full_path[i]
+        
+        # 2D cross product to detect direction changes
+        cross_product = v1[0] * v2[1] - v1[1] * v2[0]
+        
+        if not np.isclose(cross_product, 0.0, atol=1e-5):
+            simplified_path.append(full_path[i])
+
+    simplified_path.append(full_path[-1])
+    return np.array(simplified_path)
+
+
 def astar(grid_map, start_world, goal_world):
     """
-    Executa a busca A* e retorna o caminho em coordenadas reais do mundo (metros).
+    Executes A* search and returns the simplified path in world coordinates (meters).
     """
-    # Evita que o robô tente planejar se o grid não estiver inicializado
     if grid_map is None:
         return None
 
     start_row, start_col = grid_map.world_to_grid(start_world[0], start_world[1])
     goal_row, goal_col = grid_map.world_to_grid(goal_world[0], goal_world[1])
     
-    # Validação de segurança: se o destino clicado for um obstáculo, aborta
     if grid_map.matrix[goal_row, goal_col] == 1:
-        print("AVISO: Destino está obstruído por um obstáculo!")
+        print("WARNING: Destination is blocked by an obstacle!")
         return None
     
-    # O pacote 'pathfinding' inverte a lógica: 1 é livre, 0 é obstáculo
+    # Invert logic: 1 is free space, 0 is obstacle for the pathfinding package
     inverse_matrix = np.where(grid_map.matrix == 1, 0, 1)
-    
-    # Instancia o grid deles
     grid = Grid(matrix=inverse_matrix.tolist())
     
     start_node = grid.node(start_col, start_row)
     end_node = grid.node(goal_col, goal_row)
     
-    # Configura o localizador permitindo andar em diagonais
     finder = AStarFinder(diagonal_movement=DiagonalMovement.always)
-    path, runs = finder.find_path(start_node, end_node, grid)
+    path, _ = finder.find_path(start_node, end_node, grid)
     
     if not path or len(path) == 0:
         return None
         
-    # Converte de volta para metros
     world_path = []
     for node in path:
         cx, cy = grid_map.grid_to_world(node.y, node.x)

@@ -7,10 +7,9 @@ from brainbyte import BaseApp
 from brainbyte.robots.movel.TurtleBot import *
 from brainbyte.control.automatic import * 
 from brainbyte.sensors.LDS_02 import *
-from brainbyte.gui.auxF import get_key
-from brainbyte.control.manual import *
 from brainbyte.utils.environment import *
-from brainbyte.planner.cells.makeCells import *
+from brainbyte.planner.cells.makeCells import * #Importando o módulo de células
+from brainbyte.planner.path.astar import * #Importanto o Astar
 
 class PathPlanning(BaseApp):
     def __init__(self, show_lidar=True):
@@ -20,6 +19,10 @@ class PathPlanning(BaseApp):
         self.bot_radius = 0.15 
 
         self.target_point = np.array([0.0, 0.0, 0.0])
+
+        #Rota do A*
+        self.waypoints = []
+        self.current_waypoint_idx =0 
 
     def setup(self):
         self.logger.info("Configuring Robot, Sensor and Controllers..")
@@ -44,12 +47,12 @@ class PathPlanning(BaseApp):
         
         self.control = DifferentialController(pos_init=position,
                                               set_point=self.target_point,
-                                              k_alpha=0.8,
-                                              k_beta=-0.1,
-                                              k_rho=0.3,
+                                              k_alpha=0.9,
+                                              k_beta=-0.0,
+                                              k_rho=0.8,
                                               dt=self.dt)  
 
-        self.control.set_max_values(v_max=self.robot._v_max, w_max=self.robot._w_max)
+        self.control.set_max_values(v_max=self.robot._v_max, w_max=self.robot._w_max/2)
             
         self.robot.add_control(control_name='AUTO_DIFF', control_instance=self.control)
         
@@ -60,7 +63,6 @@ class PathPlanning(BaseApp):
         self.command_lines()
 
     def on_map_click(self, event):
-        """Função disparada automaticamente sempre que você clica dentro do gráfico."""
         if event.xdata is None or event.ydata is None:
             return
             
@@ -70,14 +72,40 @@ class PathPlanning(BaseApp):
         self.target_point = np.array([x_clicado, y_clicado, 0.0])
         self.plot_target_marker.set_data([x_clicado], [y_clicado])
         
-        if hasattr(self.control, 'set_point'):
-            self.control.set_point = self.target_point
-        elif hasattr(self.control, 'update_setpoint'):
-            self.control.update_setpoint(self.target_point)
-            
         if self.grid_map is not None:
-            tgt_row, tgt_col = self.grid_map.world_to_grid(x_clicado, y_clicado)
-            self.logger.info(f"Novo alvo definido -> Mundo: ({x_clicado:.2f}, {y_clicado:.2f}) | Grid: Linha {tgt_row}, Coluna {tgt_col}")
+            pos_atual = self.robot.pose
+            
+            self.logger.info("Invocando o módulo path_planner.py...")
+            # 1. Pega o caminho completo gerado pelo seu A* original
+            caminho_completo = astar(self.grid_map, pos_atual, self.target_point)
+            
+            if caminho_completo is not None:
+                self.logger.info(f"Rota calculada! {len(caminho_completo)} pontos no total.")
+                
+                # 2. Puxa apenas os pontos de curva/vértices usando sua função
+                vertices = simplify_path(caminho_completo)
+                
+                # 3. O robô vai seguir o caminho simplificado (menos pontos/mais fluido)
+                self.waypoints = vertices.tolist()
+                self.current_waypoint_idx = 0
+                
+                # 4. Plota o caminho completo (linha contínua ciano)
+                self.plot_path.set_data(caminho_completo[:, 0], caminho_completo[:, 1])
+                
+                # 5. Plota os vértices (bolinhas amarelas para destacar onde o robô vira)
+                if not hasattr(self, 'plot_vertices'):
+                    # Cria o elemento dinamicamente se ele ainda não existir no plot
+                    self.plot_vertices, = self.ax.plot([], [], 'yo', markersize=6, label='Turning Points', zorder=5)
+                    self.ax.legend(loc='upper right')
+                
+                self.plot_vertices.set_data(vertices[:, 0], vertices[:, 1])
+                
+            else:
+                self.logger.warning("Não foi possível encontrar um caminho válido.")
+                self.plot_path.set_data([], [])
+                if hasattr(self, 'plot_vertices'):
+                    self.plot_vertices.set_data([], [])
+                self.waypoints = []
 
     def command_lines(self):
         self.logger.warning("Aqui ainda será implementado uma lógica para entrar com variáveis para a simulação")
@@ -116,9 +144,7 @@ class PathPlanning(BaseApp):
             wall_keywords=['cuboid'] 
         )
         
-        # =====================================================================================
         # PROCESSAMENTO E MAPEAMENTO DO GRID DE OCUPAÇÃO (DINÂMICO)
-        # =====================================================================================
         if self.boundary_vertices and len(self.boundary_vertices) > 0:
             boundary_np = np.array(self.boundary_vertices)
             
@@ -136,7 +162,7 @@ class PathPlanning(BaseApp):
         self.ax.set_ylim(y_min - 0.5, y_max + 0.5)
 
         # Instancia e constrói a matriz de células
-        self.grid_map = GridMap(x_min=x_min, x_max=x_max, y_min=y_min, y_max=y_max, cell_size=0.1)
+        self.grid_map = GridMap(x_min=x_min, x_max=x_max, y_min=y_min, y_max=y_max, cell_size=0.2)
         
         self.logger.info("Discretizando ambiente em Grid de Ocupação...")
         self.grid_map.build_grid(self.obstacles_data)
@@ -151,7 +177,6 @@ class PathPlanning(BaseApp):
             alpha=0.35, 
             zorder=1
         )
-        # =====================================================================================
 
         # Renderização visual APENAS da linha limite das Paredes Externas
         if self.boundary_vertices:
@@ -187,23 +212,38 @@ class PathPlanning(BaseApp):
         self.plot_lidar, = self.ax.plot([], [], 'r.', markersize=2, alpha=0.6, label='Lidar', zorder=3)
         
         self.plot_path, = self.ax.plot([], [], 'c-', linewidth=2.5, label='Caminho A*', zorder=4)
-        
+
         self.ax.legend(loc='upper right')
         self.fig.canvas.mpl_connect('button_press_event', self.on_map_click)
 
     def loop(self, t, actual_state=None):
         try:
             data_sensor = self.robot.get_sensor(sensor_name='LIDAR').update() 
-            accumulated_points = data_sensor 
-
             actual_pos = self.robot.pose 
-            v_cmd, w_cmd = self.robot.get_control('AUTO_DIFF').get_control(actual_point=actual_pos)
 
+            # CONTROLADOR DE SEGUIMENTO DE CAMINHO (WAYPOINTS)
+            if self.waypoints and self.current_waypoint_idx < len(self.waypoints):
+                ponto_alvo = self.waypoints[self.current_waypoint_idx]
+                
+                self.control.set_point = np.array([ponto_alvo[0], ponto_alvo[1], 0.0])
+                
+                dist_ao_ponto = np.sqrt((actual_pos[0] - ponto_alvo[0])**2 + (actual_pos[1] - ponto_alvo[1])**2)
+                
+                if dist_ao_ponto < 0.15:
+                    self.current_waypoint_idx += 1
+                    if self.current_waypoint_idx >= len(self.waypoints):
+                        self.logger.info("O robô chegou com sucesso ao destino final!")
+            else:
+                self.control.set_point = self.target_point
+
+            # Calcula e envia os comandos físicos de velocidade para os motores
+            v_cmd, w_cmd = self.robot.get_control('AUTO_DIFF').get_control(actual_point=actual_pos)
             self.robot.set_wheel_velocity(linear_vel=v_cmd, angular_vel=w_cmd)
-            self.plot_result(ds=accumulated_points, robot=self.robot, plot_lidar=self.show_lidar)
+            
+            self.plot_result(ds=data_sensor, robot=self.robot, plot_lidar=self.show_lidar)
             
         except Exception as e:
-            self.logger.error(f"Erro detectado in loop(): {e}")
+            self.logger.error(f"Erro detectado no loop(): {e}")
     
     def plot_result(self, ds, robot, plot_lidar=True):
         if plot_lidar and ds is not None and len(ds) > 0:
