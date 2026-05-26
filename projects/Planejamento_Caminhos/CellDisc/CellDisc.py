@@ -10,9 +10,9 @@ from brainbyte.sensors.LDS_02 import *
 from brainbyte.gui.auxF import get_key
 from brainbyte.control.manual import *
 from brainbyte.utils.environment import *
-from brainbyte.planner.path.bugP import *
+from brainbyte.planner.cells.makeCells import *
 
-class BUG_Traj(BaseApp):
+class PathPlanning(BaseApp):
     def __init__(self, show_lidar=True):
         super().__init__(scene_file="mapa.ttt", sim_name="PathPlanning", sim_time=120)
         self.obstacles_data = []
@@ -38,29 +38,24 @@ class BUG_Traj(BaseApp):
         monitor_paths = self.robot.get_monitor_paths()
         actuator_paths = self.robot.get_actuator_paths()
         self.bridge.initialize(monitor_paths, actuator_paths, self.sim)
-
-        # =======================================================================================
+        
         position = self.robot.pose
         self.target_point = np.array([position[0], position[1], position[2]])
         
-        # Usando o controlador atualizado
-        self.control = SimpleController(k_rho=0.5,
-                                        k_alpha=1.5, 
-                                        v_max=0.3,
-                                        w_max=1.0)
+        self.control = DifferentialController(pos_init=position,
+                                              set_point=self.target_point,
+                                              k_alpha=0.8,
+                                              k_beta=-0.1,
+                                              k_rho=0.3,
+                                              dt=self.dt)  
 
-        # Usando fallback seguro para os limites
-        v_max_fallback = getattr(self.robot, '_v_max', 0.22)
-        w_max_fallback = getattr(self.robot, '_w_max', 2.84)
-        self.control.set_max_values(v_max=v_max_fallback, w_max=w_max_fallback)
+        self.control.set_max_values(v_max=self.robot._v_max, w_max=self.robot._w_max)
             
         self.robot.add_control(control_name='AUTO_DIFF', control_instance=self.control)
-        # =======================================================================================
         
-        # Adicionando o planner atualizado
-        self.planner = BugPlanner(target_point=self.target_point, safety_distance=0.5)
-        
-        # Configurações de plot
+        # Grid inicializado como None (será construído dinamicamente pelas dimensões das paredes)
+        self.grid_map = None
+
         self.define_plot_configs()
         self.command_lines()
 
@@ -73,88 +68,100 @@ class BUG_Traj(BaseApp):
         y_clicado = event.ydata
         
         self.target_point = np.array([x_clicado, y_clicado, 0.0])
-        
         self.plot_target_marker.set_data([x_clicado], [y_clicado])
         
         if hasattr(self.control, 'set_point'):
             self.control.set_point = self.target_point
         elif hasattr(self.control, 'update_setpoint'):
             self.control.update_setpoint(self.target_point)
-
-        self.planner.target_point = np.array([x_clicado, y_clicado])
-        self.planner.start_point = None
-        self.planner.current_state = self.planner.STATE_GO_TO_GOAL
-
-        self.logger.info(f"Novo alvo definido via clique: X={x_clicado:.2f}, Y={y_clicado:.2f}")
+            
+        if self.grid_map is not None:
+            tgt_row, tgt_col = self.grid_map.world_to_grid(x_clicado, y_clicado)
+            self.logger.info(f"Novo alvo definido -> Mundo: ({x_clicado:.2f}, {y_clicado:.2f}) | Grid: Linha {tgt_row}, Coluna {tgt_col}")
 
     def command_lines(self):
         self.logger.warning("Aqui ainda será implementado uma lógica para entrar com variáveis para a simulação")
 
     def post_start(self):
         super().post_start()
-        self.bridge.step() # Forçar atualização
+        self.bridge.step() 
 
-        # =====================================================================================================================
         pos = self.robot.pose
         self.logger.info(f'Initial robot position: x={pos[0]:.2f}, y={pos[1]:.2f}, theta ={np.rad2deg(pos[2]):.2f}')
-        self.target_point = np.array([pos[0], pos[1], pos[2]])
+        self.target_point = pos 
         self.control.set_point = self.target_point
-        self.planner.target_point = np.array([pos[0], pos[1]])
         self.plot_target_marker.set_data([self.target_point[0]], [self.target_point[1]])
-        # =====================================================================================================================
 
         self.bot_radius = get_robot_radius(self.sim, 'Turtlebot3/base_link')
 
+        # Desenha o contorno do Robô
         self.plot_robot_body = patches.Circle(
             (pos[0], pos[1]), radius=self.bot_radius,
             edgecolor='r', facecolor='none', linewidth=2, label='Contorno do Robô', zorder=5
         )
         self.ax.add_patch(self.plot_robot_body)
         
-        dx = self.bot_radius * np.cos(pos[2]) * 2
-        dy = self.bot_radius * np.sin(pos[2]) * 2
+        # Vetor de Direção do Robô
+        dx = self.bot_radius * np.cos(pos[2])*2
+        dy = self.bot_radius * np.sin(pos[2])*2
         self.plot_robot_dir, = self.ax.plot(
-            [pos[0], pos[0] + dx],
-            [pos[1], pos[1] + dy],
+            [pos[0],pos[0]+dx], [pos[1],pos[1]+dy],
             color='b', linewidth=2, zorder=6, label='Direção'
         )
 
-        self.ax.legend(loc='upper right')
-
+        # Captura os dados poligonais e as paredes do CoppeliaSim
         self.obstacles_data, self.boundary_vertices, _ = get_environment_obstacles(
             self.sim, 
             robot_radius=self.bot_radius,
             wall_keywords=['cuboid'] 
         )
         
-        for obs in self.obstacles_data:
-            polygon_inflated = patches.Polygon(
-                obs['corners'], closed=True, linewidth=1.2, 
-                edgecolor='red', facecolor='red', alpha=0.15, linestyle='--', zorder=2
-            )
-            self.ax.add_patch(polygon_inflated)
-
-            polygon_real = patches.Polygon(
-                obs['corners_originals'], closed=True, linewidth=1.5, 
-                edgecolor='#333333', facecolor='#666666', alpha=0.9, zorder=3
-            )
-            self.ax.add_patch(polygon_real)
-
-        if self.boundary_vertices:
+        # =====================================================================================
+        # PROCESSAMENTO E MAPEAMENTO DO GRID DE OCUPAÇÃO (DINÂMICO)
+        # =====================================================================================
+        if self.boundary_vertices and len(self.boundary_vertices) > 0:
             boundary_np = np.array(self.boundary_vertices)
             
+            # Extrai os limites reais com base nos vértices das paredes
+            x_min, y_min = np.min(boundary_np, axis=0)
+            x_max, y_max = np.max(boundary_np, axis=0)
+            
+            self.logger.info(f"Limites dinâmicos detectados -> X: [{x_min:.2f} a {x_max:.2f}], Y: [{y_min:.2f} a {y_max:.2f}]")
+        else:
+            x_min, x_max, y_min, y_max = -7.0, 7.0, -7.0, 7.0
+            self.logger.warning("Paredes não detectadas. Usando limites padrão (-7 a 7).")
+
+        # Ajusta as janelas de exibição do Matplotlib para enquadrar perfeitamente as paredes com margem de 0.5m
+        self.ax.set_xlim(x_min - 0.5, x_max + 0.5)
+        self.ax.set_ylim(y_min - 0.5, y_max + 0.5)
+
+        # Instancia e constrói a matriz de células
+        self.grid_map = GridMap(x_min=x_min, x_max=x_max, y_min=y_min, y_max=y_max, cell_size=0.1)
+        
+        self.logger.info("Discretizando ambiente em Grid de Ocupação...")
+        self.grid_map.build_grid(self.obstacles_data)
+        self.logger.info(f"Grid gerado com sucesso! Dimensões: {self.grid_map.matrix.shape}")
+
+        # Plota apenas a matriz de células (Ocupado = Escuro, Livre = Claro)
+        self.ax.imshow(
+            self.grid_map.matrix, 
+            origin='lower', 
+            extent=[self.grid_map.x_min, self.grid_map.x_max, self.grid_map.y_min, self.grid_map.y_max], 
+            cmap='Greys', 
+            alpha=0.35, 
+            zorder=1
+        )
+        # =====================================================================================
+
+        # Renderização visual APENAS da linha limite das Paredes Externas
+        if self.boundary_vertices:
+            boundary_np = np.array(self.boundary_vertices)
             polygon_boundary = patches.Polygon(
                 boundary_np, closed=True, linewidth=4,
                 edgecolor="#000000", facecolor='none', linestyle='-',
-                label='Limite da Área Útil', zorder=3
+                label='Paredes do Mapa', zorder=3
             )
             self.ax.add_patch(polygon_boundary)
-            
-            self.ax.scatter(
-                boundary_np[:, 0], boundary_np[:, 1],
-                color='#00AA55', marker='s', s=50, 
-                label='Vértices Discretização', zorder=4
-            )
 
         self.ax.legend(loc='upper right')
             
@@ -162,58 +169,42 @@ class BUG_Traj(BaseApp):
         plt.ion() 
         self.fig, self.ax = plt.subplots(figsize=(8, 8))
         self.ax.set_aspect('equal')
+        
+        # Limites iniciais temporários (serão redefinidos dinamicamente no post_start)
         self.ax.set_xlim(-7, 7)
         self.ax.set_ylim(-7, 7)
         
-        self.ax.set_title("Mapa de Planejamento de Caminhos", fontsize=14, pad=15)
+        self.ax.set_title("Navegação e Planejamento de Caminhos", fontsize=14, pad=15)
         self.ax.set_xlabel("X (metros)")
         self.ax.set_ylabel("Y (metros)")
-        self.ax.grid(True, linestyle='--', alpha=0.5, zorder=0)
+        self.ax.grid(True, linestyle='--', alpha=0.3, zorder=0)
 
         self.plot_robot_center, = self.ax.plot([], [], 'ro', markersize=4, zorder=6)
-        
         self.plot_target_marker, = self.ax.plot(
             [self.target_point[0]], [self.target_point[1]], 
             'g.', markersize=12, label='Objetivo Atual', zorder=7
         )
-        
         self.plot_lidar, = self.ax.plot([], [], 'r.', markersize=2, alpha=0.6, label='Lidar', zorder=3)
-            
+        
+        self.plot_path, = self.ax.plot([], [], 'c-', linewidth=2.5, label='Caminho A*', zorder=4)
+        
         self.ax.legend(loc='upper right')
         self.fig.canvas.mpl_connect('button_press_event', self.on_map_click)
 
     def loop(self, t, actual_state=None):
         try:
-            # 1. Coleta dados dos sensores
-            accumulated_points = self.robot.get_sensor(sensor_name='LIDAR').update() 
-            left, front, right, back = self.robot.get_sensor(sensor_name='LIDAR').get_cloud_points_sectores() 
+            data_sensor = self.robot.get_sensor(sensor_name='LIDAR').update() 
+            accumulated_points = data_sensor 
+
             actual_pos = self.robot.pose 
+            v_cmd, w_cmd = self.robot.get_control('AUTO_DIFF').get_control(actual_point=actual_pos)
 
-            # Validação segura dos arrays do sensor
-            dst_front_min = np.min(np.hypot(front[:, 0], front[:, 1])) if (front is not None and front.size > 0) else float('inf')
-            dst_right_min = np.min(np.hypot(right[:, 0], right[:, 1])) if (right is not None and right.size > 0) else float('inf')
-            obstacle_detected = bool(dst_front_min < self.planner.safety_distance)
-
-            # 2. Controlador de alvo LIVRE 
-            v_goal, w_goal = self.control.compute(actual_pos=actual_pos, target_point=self.target_point)
-
-            # 3. BugPlanner atualizado com passagem de mapa (obstacles_data)
-            v_cmd, w_cmd, state_status = self.planner.update(
-                actual_pos=actual_pos,
-                obstacle_in_front=obstacle_detected,
-                wall_distance=dst_right_min,
-                v_goal=v_goal,
-                w_goal=w_goal,
-                obstacles_data=self.obstacles_data  # <-- NOVA LINHA INTEGRADA AQUI
-            )
-
-            # 4. Envia comandos e atualiza plot
             self.robot.set_wheel_velocity(linear_vel=v_cmd, angular_vel=w_cmd)
             self.plot_result(ds=accumulated_points, robot=self.robot, plot_lidar=self.show_lidar)
             
         except Exception as e:
             self.logger.error(f"Erro detectado in loop(): {e}")
-
+    
     def plot_result(self, ds, robot, plot_lidar=True):
         if plot_lidar and ds is not None and len(ds) > 0:
             self.plot_lidar.set_data(ds[:, 0], ds[:, 1])
@@ -226,8 +217,8 @@ class BUG_Traj(BaseApp):
         self.plot_robot_body.set_center((pos[0], pos[1]))
         self.plot_robot_center.set_data([pos[0]], [pos[1]])
         
-        dx = self.bot_radius * np.cos(theta) * 2
-        dy = self.bot_radius * np.sin(theta) * 2
+        dx = self.bot_radius * np.cos(theta)*2
+        dy = self.bot_radius * np.sin(theta)*2
         self.plot_robot_dir.set_data([pos[0], pos[0] + dx], [pos[1], pos[1] + dy])
         
         self.fig.canvas.draw()
@@ -242,5 +233,5 @@ class BUG_Traj(BaseApp):
             self.logger.error(f"Erro detectado in stop(): {e}")
     
 def app():
-    aplicacao = BUG_Traj(show_lidar=False)
+    aplicacao = PathPlanning(show_lidar=False)
     aplicacao.run()

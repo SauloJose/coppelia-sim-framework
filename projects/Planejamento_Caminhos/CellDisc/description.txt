@@ -1,0 +1,1 @@
+É uma simulação em que eu gero uma grade de células e então utilizo algorítmos de trajetórias mínimas para encontrar o caminho.

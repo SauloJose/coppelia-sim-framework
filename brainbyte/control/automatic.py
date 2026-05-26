@@ -477,11 +477,9 @@ class OmnidirectionalController:
 
         return np.array([self.vx_cmd, self.vy_cmd]), self.w_cmd
     
-
-
 class SimpleController:
-    def __init__(self, k_rho=0.8, k_alpha=1.5, v_max=0.5, w_max=1.0):
-        # Ganhos Proporcionais (Ambos devem ser POSITIVOS)
+    def __init__(self, k_rho=0.8, k_alpha=1.5, v_max=0.5, w_max=1.0, tolerance=0.05):
+        # Ganhos Proporcionais
         self.k_rho = k_rho
         self.k_alpha = k_alpha
         
@@ -489,22 +487,19 @@ class SimpleController:
         self.v_max = v_max
         self.w_max = w_max
         
+        # Tolerância de chegada para evitar a "Singularidade da Origem" (girar como pião)
+        self.tolerance = tolerance
+        
         # Atributo essencial para evitar erros de escopo ao clicar no mapa
         self.set_point = np.array([0.0, 0.0, 0.0])
 
     def set_max_values(self, v_max=1.0, w_max=4.0, *args, **kwargs):
-        """
-        Mantém a compatibilidade com a chamada padrão do TurtleBot 
-        dentro do método setup().
-        """
+        """Mantém a compatibilidade com a chamada padrão do TurtleBot."""
         self.v_max = v_max
         self.w_max = w_max
 
     def compute(self, actual_pos, target_point):
-        """
-        Calcula comandos simples focados estritamente em avançar de frente.
-        """
-        # Sincroniza o set_point interno caso ele tenha sido modificado externamente
+        """Calcula comandos simples focados estritamente em avançar de frente."""
         self.set_point = np.asarray(target_point)
         
         dx = self.set_point[0] - actual_pos[0]
@@ -513,22 +508,31 @@ class SimpleController:
 
         rho = np.hypot(dx, dy)
         
+        # ZONA MORTA: Se estiver muito perto do alvo, desliga os motores e evita o giro infinito
+        if rho < self.tolerance:
+            return 0.0, 0.0
+
         # Ângulo direto para o alvo em relação à frente do robô
         alpha = np.arctan2(dy, dx) - theta
+        
         # Normalização do ângulo estritamente entre [-pi, pi]
         alpha = (alpha + np.pi) % (2 * np.pi) - np.pi
 
-        # Se o alvo estiver muito desalinhado (atrás do robô ou > 60 graus), 
-        # rotaciona no próprio eixo sem andar para frente para não fazer órbitas
-        if abs(alpha) > (np.pi / 3):
+        # Suavização da transição: 
+        # Em vez de um corte brusco (if > 60 graus), aplicamos uma redução 
+        # gradual da velocidade linear conforme o robô perde o alinhamento.
+        
+        if abs(alpha) > (np.pi / 2):
+            # Se o alvo estiver a mais de 90 graus (atrás), só gira
             v_target = 0.0
             w_target = self.k_alpha * alpha
         else:
-            # Controle proporcional direto para frente
-            v_target = self.k_rho * rho
+            # Controle proporcional. O cosseno(alpha) faz a velocidade linear 
+            # diminuir naturalmente em curvas fechadas e aumentar em retas.
+            v_target = self.k_rho * rho * np.cos(alpha)
             w_target = self.k_alpha * alpha
 
-        # Saturação de segurança (Impede marchas rés e excessos de giro)
+        # Saturação de segurança
         v_cmd = np.clip(v_target, 0.0, self.v_max) 
         w_cmd = np.clip(w_target, -self.w_max, self.w_max)
 
