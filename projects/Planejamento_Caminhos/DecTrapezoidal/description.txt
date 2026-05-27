@@ -1,0 +1,1 @@
+Aqui a simulação irá discretizar o mapa utilizando uma discretização trapezoidal, gerando um grafo de posições mais útil e interessante.
