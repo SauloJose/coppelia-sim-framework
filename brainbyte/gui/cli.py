@@ -10,7 +10,6 @@ from brainbyte.gui.auxF import *
 from brainbyte.utils.logging import *  
 from brainbyte.core.paths import *
 import traceback
-<<<<<<< HEAD
 try:
     import msvcrt
 except ImportError:
@@ -35,8 +34,6 @@ except ImportError:
         getch = _Getch()
 
     msvcrt = MockMsvcrt()
-=======
->>>>>>> main
 
 import platform
 import subprocess
