@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+"""
+Template de Publisher ROS
+Use este arquivo como base para criar um publisher em seu projeto ROS.
+Substitua {topic_name} pelo nome do seu tópico
+Substitua {message_type} pelo tipo de mensagem (ex: std_msgs.String)
+"""
+
+import rospy
+from std_msgs.msg import String, Int32, Float32
+# TODO: Importe o tipo de mensagem correto
+
+class {topic_name}Publisher:
+    def __init__(self):
+        """Inicializa o publisher."""
+        self.topic_name = '{topic_name}'
+        # TODO: Defina o tipo de mensagem correto
+        self.publisher = rospy.Publisher(self.topic_name, String, queue_size=10)
+        rospy.init_node('publisher_node')
+        self.rate = rospy.Rate(10)  # 10 Hz
+    
+    def publish_message(self, message):
+        """Publica uma mensagem no tópico."""
+        self.publisher.publish(message)
+        rospy.loginfo(f"Publicado: {message}")
+    
+    def run(self):
+        """Loop principal de publicação."""
+        rospy.loginfo(f"Publisher iniciado no tópico: {self.topic_name}")
+        
+        while not rospy.is_shutdown():
+            # TODO: Defina a lógica de publicação aqui
+            # msg = String(data="mensagem_exemplo")
+            # self.publish_message(msg)
+            self.rate.sleep()
+
+def app():
+    """Função principal."""
+    try:
+        pub = {topic_name}Publisher()
+        pub.run()
+    except rospy.ROSInterruptException:
+        pass
+
+if __name__ == '__main__':
+    app()

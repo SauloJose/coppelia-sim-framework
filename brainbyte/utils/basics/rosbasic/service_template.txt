@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+"""
+Template de Serviço ROS (Service Server)
+Use este arquivo como base para criar um servidor de serviço em seu projeto ROS.
+Substitua {service_name} pelo nome do seu serviço
+Substitua {srv_type} pelo tipo de serviço (ex: std_srvs.Empty)
+"""
+
+import rospy
+# TODO: Importe o tipo de serviço correto
+# from your_package.srv import YourService, YourServiceResponse
+
+class {service_name}Server:
+    def __init__(self):
+        """Inicializa o servidor de serviço."""
+        self.service_name = '{service_name}'
+        rospy.init_node('service_server_node')
+        # TODO: Defina o tipo de serviço correto
+        # rospy.Service(self.service_name, YourService, self.handle_request)
+    
+    def handle_request(self, request):
+        """Trata a solicitação de serviço."""
+        rospy.loginfo(f"Serviço {self.service_name} foi chamado")
+        # TODO: Implemente a lógica do serviço aqui
+        # response = YourServiceResponse()
+        # response.result = True
+        # return response
+        pass
+    
+    def run(self):
+        """Mantém o servidor ativo."""
+        rospy.loginfo(f"Servidor de serviço {self.service_name} ativo")
+        rospy.spin()
+
+def app():
+    """Função principal."""
+    try:
+        server = {service_name}Server()
+        server.run()
+    except rospy.ROSInterruptException:
+        pass
+
+if __name__ == '__main__':
+    app()

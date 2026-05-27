@@ -9,5 +9,9 @@
         "pynput==1.8.1",
         "pyzmq==27.1.0",
         "setuptools==76.0.0"
-    ]
+    ],
+    "cli_commands": false,
+    "ros_connection": false,
+    "udp_connection": false,
+    "ros_projects": false
 }

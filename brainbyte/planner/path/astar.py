@@ -1,4 +1,3 @@
-# path_planner.py
 import numpy as np 
 from pathfinding.core.diagonal_movement import DiagonalMovement
 from pathfinding.core.grid import Grid
@@ -37,12 +36,23 @@ def astar(grid_map, start_world, goal_world):
     start_row, start_col = grid_map.world_to_grid(start_world[0], start_world[1])
     goal_row, goal_col = grid_map.world_to_grid(goal_world[0], goal_world[1])
     
+    # Validação preventiva: verifica se os pontos estão dentro das dimensões do mapa
+    rows, cols = grid_map.matrix.shape
+    if not (0 <= start_row < rows and 0 <= start_col < cols) or \
+       not (0 <= goal_row < rows and 0 <= goal_col < cols):
+        print("WARNING: Start or Goal is outside the grid bounds!")
+        return None
+    
+    # Validação de obstáculo usando sua lógica (1 = bloqueado)
+    if grid_map.matrix[start_row, start_col] == 1:
+        print("WARNING: Start position is blocked by an obstacle!")
+        return None
+        
     if grid_map.matrix[goal_row, goal_col] == 1:
         print("WARNING: Destination is blocked by an obstacle!")
         return None
     
-    # Invert logic: 1 is free space, 0 is obstacle for the pathfinding package
-    inverse_matrix = np.where(grid_map.matrix == 1, 0, 1)
+    inverse_matrix = 1 - grid_map.matrix
     grid = Grid(matrix=inverse_matrix.tolist())
     
     start_node = grid.node(start_col, start_row)
@@ -52,10 +62,12 @@ def astar(grid_map, start_world, goal_world):
     path, _ = finder.find_path(start_node, end_node, grid)
     
     if not path or len(path) == 0:
+        print("WARNING: No path found!")
         return None
         
     world_path = []
     for node in path:
+        # Retorna para o formato do seu grid_map (linha=node.y, coluna=node.x)
         cx, cy = grid_map.grid_to_world(node.y, node.x)
         world_path.append([cx, cy])
         

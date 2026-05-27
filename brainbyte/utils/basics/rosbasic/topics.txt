@@ -1,0 +1,68 @@
+# Guia de Tópicos ROS
+
+## O que é um Tópico?
+Um tópico é um canal de comunicação no qual os nós ROS trocam mensagens.
+Publishers enviam mensagens para um tópico, e subscribers recebem essas mensagens.
+
+## Estrutura Básica de um Tópico
+
+```
+Nome do Tópico: /robot/position
+Tipo de Mensagem: geometry_msgs/PoseStamped
+Publishers: localization_node
+Subscribers: navigation_node, visualization_node
+Taxa de Publicação: 10 Hz
+```
+
+## Nomenclatura Recomendada
+
+- Use nomes descritivos: `/cmd_vel`, `/sensor_data`, `/robot/odometry`
+- Use barras para organizar hierarquicamente: `/robot/imu/data`
+- Evite espaços em branco, use snake_case
+- Prefixo com `/` para indicar tópicos globais
+
+## Exemplo de Tópicos Comuns
+
+### Sensores
+- `/camera/image_raw` - Imagem da câmera
+- `/lidar/scan` - Dados do LIDAR
+- `/imu/data` - Dados do IMU
+- `/gps/fix` - Posição GPS
+
+### Controle
+- `/cmd_vel` - Comando de velocidade
+- `/joint_states` - Estados das juntas
+- `/motor/speed` - Velocidade dos motores
+
+### Localização
+- `/odom` - Odometria
+- `/tf` - Transformações (frames)
+- `/pose` - Posição e orientação
+
+## Tipos de Mensagens Comuns
+
+- `std_msgs/String` - Texto simples
+- `std_msgs/Int32` / `Float32` - Números
+- `sensor_msgs/Image` - Imagem
+- `geometry_msgs/Twist` - Velocidade (linear + angular)
+- `geometry_msgs/Pose` - Posição + Orientação
+
+## Criando um Novo Tópico
+
+1. Escolha um nome descritivo
+2. Defina o tipo de mensagem
+3. Crie publishers/subscribers conforme necessário
+4. Configure a taxa de publicação (Hz)
+5. Documente o propósito e formato
+
+## TODO: Defina os tópicos do seu projeto aqui
+
+```
+Tópico 1: /{name}
+Tipo: 
+Descrição:
+
+Tópico 2: /{name}
+Tipo:
+Descrição:
+```

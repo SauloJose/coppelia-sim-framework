@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+"""
+Template de Nó ROS
+Esse arquivo serve como base para criar novos nós no seu projeto ROS.
+Substitua {name_node} pelo nome do seu nó.
+"""
+
+import rospy
+
+class {name_node}:
+    def __init__(self):
+        """Inicializa o nó {name_node}."""
+        self.node_name = '{name_node}'
+        rospy.init_node(self.node_name)
+        self.rate = rospy.Rate(10)  # 10 Hz
+        
+        # TODO: Inicialize seus publishers e subscribers aqui
+        
+    def run(self):
+        """Loop principal do nó."""
+        rospy.loginfo(f"Nó {self.node_name} iniciado")
+        
+        while not rospy.is_shutdown():
+            # TODO: Implemente sua lógica aqui
+            self.rate.sleep()
+    
+    def shutdown_callback(self):
+        """Chamado quando o nó é encerrado."""
+        rospy.loginfo(f"Nó {self.node_name} encerrado")
+
+def app():
+    """Função principal para executar o nó."""
+    try:
+        node = {name_node}()
+        node.run()
+    except rospy.ROSInterruptException:
+        pass
+
+if __name__ == '__main__':
+    app()

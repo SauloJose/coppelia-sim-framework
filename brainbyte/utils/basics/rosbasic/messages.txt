@@ -1,0 +1,93 @@
+# Guia de Mensagens Personalizadas ROS
+
+## O que é uma Mensagem Personalizada?
+Uma mensagem personalizada é um tipo de dados estruturado definido em um arquivo .msg
+que permite comunicação tipada entre nós ROS.
+
+## Estrutura de um Arquivo .msg
+
+```
+# Exemplo: geometry_msgs/Point.msg
+float32 x
+float32 y
+float32 z
+```
+
+## Tipos de Dados Suportados
+
+### Tipos Primitivos
+- `bool` - Booleano (true/false)
+- `int8`, `int16`, `int32`, `int64` - Inteiros com sinal
+- `uint8`, `uint16`, `uint32`, `uint64` - Inteiros sem sinal
+- `float32`, `float64` - Números decimais
+- `string` - Texto
+
+### Tipos Compostos
+- `Time` - Timestamp ROS
+- `Duration` - Intervalo de tempo
+- Arrays: `tipo[]` para array dinâmico ou `tipo[tamanho]` para array fixo
+
+## Exemplo de Mensagem Personalizada
+
+```
+# Arquivo: sensor_data.msg
+Header header
+string sensor_name
+float32 value
+int32 error_code
+bool is_valid
+```
+
+## Como Criar uma Mensagem Personalizada
+
+1. Crie um arquivo `.msg` na pasta `msg/` do seu pacote
+2. Defina os campos da mensagem
+3. Declare no `CMakeLists.txt`:
+   ```
+   add_message_files(
+     FILES
+     sensor_data.msg
+   )
+   ```
+4. Gere o código com: `catkin_make`
+
+## Mensagens Comuns do ROS
+
+### std_msgs
+- `String` - Texto
+- `Int32`, `Float32` - Números
+- `Bool` - Booleano
+
+### geometry_msgs
+- `Point` - Ponto 3D
+- `Pose` - Posição + Orientação
+- `Twist` - Velocidade Linear + Angular
+
+### sensor_msgs
+- `Image` - Imagem
+- `LaserScan` - Dados LIDAR
+- `PointCloud2` - Nuvem de pontos
+
+## TODO: Defina suas mensagens personalizadas aqui
+
+```
+Mensagem 1: {message_name}
+Campos:
+  - field_name (tipo): descrição
+
+Mensagem 2: {message_name}
+Campos:
+  - field_name (tipo): descrição
+```
+
+## Exemplo Prático
+
+```
+# Arquivo: robot_status.msg
+Header header
+string robot_name
+float32 battery_level
+bool is_moving
+int32 tasks_completed
+geometry_msgs/Pose current_pose
+```
