@@ -95,6 +95,16 @@ class BaseApp:
         return False
     
     def run(self):
+        import signal 
+
+        self.is_running = True
+
+        def handle_sigint(sig, frame):
+            self.logger.warning("\n[SIGNAL] Ctrl+C detected. Cleaning up and exiting the loop...")
+            self.is_running = False
+
+        # Override the OS-level interrupt signal (SIGINT) with our custom handler
+        signal.signal(signal.SIGINT, handle_sigint)
         try:
             # Load scene
             if self.scene_file:
@@ -140,12 +150,21 @@ class BaseApp:
                 self.sim.step()
                 time.sleep(0.05)
             
+<<<<<<< HEAD
             self.bridge = SimulationBridge()
+=======
+            # Inicializa a ponte de comunicação
+            self.bridge = SimulationBridge()
+
+            # Configuração inicial do usuário
+>>>>>>> main
             self.setup()
             self.post_start()
             
             t = self.simu_time()
+            self.logger.info("Simulation loop started. Press Ctrl+C in terminal to interrupt.")
 
+<<<<<<< HEAD
             if not HAS_KEYBOARD:
                 self.logger.warning("Keyboard monitoring disabled (requires sudo on Linux). Use Ctrl+C to stop.")
 
@@ -165,6 +184,16 @@ class BaseApp:
 
         except KeyboardInterrupt:
             self.logger.warning("Simulation manually interrupted from terminal (Ctrl+C).")
+=======
+            # Loop principal corrigido (Apenas 1 step por iteração)
+            while t < self.sim_time and self.is_running:
+                current_state = self.bridge.step()
+                t = current_state.get('sim_time', t + self.dt)
+                
+                # Executa a lógica customizada da classe filha
+                self.loop(t=t, actual_state=current_state)
+            self.logger.info(f"Simulation arrived on time limit of {self.sim_time} seconds... The simulation will stopping now.")
+>>>>>>> main
         except Exception as e:
             msg = traceback.format_exc()
             self.logger.exception(f"Unexpected error in run() from BaseApp: {e}\n => Traceback: \n\n{msg}")
@@ -172,13 +201,27 @@ class BaseApp:
         finally:    
             self.logger.info("Stopping simulation in finally...")
             try:
+                self.logger.info("trying to finish the simulation with the stop() method")
                 self.stop()
+<<<<<<< HEAD
                 if hasattr(self, 'bridge'):
                     self.bridge.close()
                 self.sim.stopSimulation()
             except:
                 return
     
+=======
+                self.logger.info("stop() had been executed sucessfull")
+                if hasattr(self, 'bridge'):
+                    self.logger.info("Closing Bridge Conection")
+                    self.bridge.close()
+                self.sim.stopSimulation()
+                self.logger.info("Simulation was sucessfull finished")
+            except Exception:
+                pass
+
+    # Fetch standard information 
+>>>>>>> main
     def d_time(self):
         return self.sim.getSimulationTimeStep()
     

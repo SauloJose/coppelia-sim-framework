@@ -1,0 +1,82 @@
+# Guia de Nós ROS
+
+## O que é um Nó?
+Um nó é um programa executável que executa uma tarefa específica em ROS.
+Cada nó é responsável por uma função ou conjunto de funções relacionadas.
+
+## Estrutura Básica de um Nó
+
+```python
+import rospy
+
+class MyNode:
+    def __init__(self):
+        rospy.init_node('my_node')
+        # Inicialize publishers, subscribers, etc.
+    
+    def run(self):
+        # Loop principal
+        while not rospy.is_shutdown():
+            # Implemente sua lógica aqui
+            pass
+
+if __name__ == '__main__':
+    node = MyNode()
+    node.run()
+```
+
+## Ciclo de Vida de um Nó
+
+1. **Inicialização** - `rospy.init_node()`
+2. **Configuração** - Setup de publishers/subscribers
+3. **Execução** - Loop principal (`rospy.spin()` ou loop while)
+4. **Encerramento** - Cleanup e encerramento
+
+## Nomenclatura de Nós
+
+- Use nomes descritivos: `lidar_driver`, `path_planner`, `control_system`
+- Evite espaços, use snake_case
+- Nomes no plural para grupos: `motor_controllers`
+- Namespace para organizar: `/robot/lidar_driver`
+
+## Tipos de Nós Comuns
+
+### Nós de Sensor
+Leem dados de sensores e publicam no ROS
+Exemplo: `lidar_driver`, `camera_node`
+
+### Nós de Processamento
+Recebem dados, processam e publicam resultados
+Exemplo: `object_detector`, `path_planner`
+
+### Nós de Controle
+Enviam comandos para atuadores
+Exemplo: `motor_controller`, `servo_driver`
+
+### Nós de Visualização
+Visualizam dados em ferramentas como RViz
+Exemplo: `visualization_node`
+
+## Boas Práticas
+
+1. Cada nó deve ter um propósito bem definido
+2. Use tópicos para comunicação entre nós
+3. Implemente tratamento de erros e logging
+4. Documente os tópicos que publica/subscreve
+5. Use parâmetros para configuração dinâmica
+
+## TODO: Defina os nós do seu projeto aqui
+
+```
+Nó 1: {node_name}
+Tipo: [Sensor/Processamento/Controle/Visualização]
+Publishers: 
+Subscribers:
+Descrição:
+
+Nó 2: {node_name}
+Tipo:
+Publishers:
+Subscribers:
+Descrição:
+```

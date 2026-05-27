@@ -34,7 +34,7 @@ def verify_and_install_dependencies():
             with open(CONFIG_FILE, 'r') as f:
                 config_data = json.load(f)
         except json.JSONDecodeError:
-            config_data = {}
+            config_data = {} 
 
     # Pega o que está salvo no config (o que já foi instalado antes)
     saved_reqs = config_data.get("installed_dependencies", [])

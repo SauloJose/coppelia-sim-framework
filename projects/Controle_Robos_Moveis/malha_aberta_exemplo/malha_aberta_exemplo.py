@@ -125,7 +125,7 @@ class LocomocaoTeste(BaseApp):
         # Armazenar referência para comparação posterior
         self.ref_pos = np.array([x_ref, y_ref, 0.0])
     
-    def loop(self, t):
+    def loop(self, t,actual_state=None):
         """Executado a cada passo de simulação."""
         # Gerar velocidades de referência baseado na trajetória Lissajous
         t = self.sim.getSimulationTime()

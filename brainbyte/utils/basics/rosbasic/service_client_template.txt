@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+"""
+Template de Serviço ROS (Service Client)
+Use este arquivo como base para criar um cliente de serviço em seu projeto ROS.
+Substitua {service_name} pelo nome do seu serviço
+Substitua {srv_type} pelo tipo de serviço
+"""
+
+import rospy
+# TODO: Importe o tipo de serviço correto
+# from your_package.srv import YourService
+
+class {service_name}Client:
+    def __init__(self):
+        """Inicializa o cliente de serviço."""
+        self.service_name = '{service_name}'
+        rospy.init_node('service_client_node')
+        # TODO: Aguarde que o serviço esteja disponível
+        # rospy.wait_for_service(self.service_name)
+    
+    def call_service(self, *args):
+        """Chama o serviço com os argumentos fornecidos."""
+        try:
+            # TODO: Crie o proxy do serviço
+            # service_proxy = rospy.ServiceProxy(self.service_name, YourService)
+            # response = service_proxy(*args)
+            # return response
+            pass
+        except rospy.ServiceException as e:
+            rospy.logerr(f"Erro ao chamar serviço: {e}")
+            return None
+    
+    def run(self):
+        """Executa o cliente de serviço."""
+        rospy.loginfo(f"Cliente de serviço {self.service_name} iniciado")
+        # TODO: Implemente a lógica do cliente aqui
+        # response = self.call_service()
+        # rospy.loginfo(f"Resposta: {response}")
+
+def app():
+    """Função principal."""
+    try:
+        client = {service_name}Client()
+        client.run()
+    except rospy.ROSInterruptException:
+        pass
+
+if __name__ == '__main__':
+    app()

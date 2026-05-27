@@ -1,0 +1,122 @@
+# Estrutura de Projeto ROS - Guia
+
+## Organização do Projeto
+
+```
+{project_name}/
+├── src/                          # Código-fonte
+│   └── {package_name}/           # Seu pacote ROS
+│       ├── CMakeLists.txt        # Build configuration
+│       ├── package.xml           # Metadados do pacote
+│       ├── nodes/                # Nós executáveis
+│       │   ├── main_node.py
+│       │   └── sensor_node.py
+│       ├── scripts/              # Scripts auxiliares
+│       ├── launch/               # Arquivos de lançamento
+│       │   └── main.launch
+│       ├── config/               # Arquivos de configuração
+│       │   └── params.yaml
+│       ├── msg/                  # Mensagens personalizadas
+│       ├── srv/                  # Serviços personalizados
+│       └── rviz/                 # Configurações RViz
+│
+├── data/                         # Dados do projeto
+├── results/                      # Resultados e logs
+└── README.md                     # Documentação
+```
+
+## Arquivo package.xml
+
+```xml
+<?xml version="1.0"?>
+<package format="2">
+  <name>{package_name}</name>
+  <version>0.0.1</version>
+  <description>Descrição do seu projeto</description>
+  <maintainer email="seu_email@example.com">Seu Nome</maintainer>
+  <license>BSD</license>
+  
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>rospy</depend>
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>sensor_msgs</depend>
+</package>
+```
+
+## Arquivo CMakeLists.txt (Básico)
+
+```cmake
+cmake_minimum_required(VERSION 3.0.2)
+project({package_name})
+
+find_package(catkin REQUIRED COMPONENTS
+  rospy
+  std_msgs
+  geometry_msgs
+)
+
+catkin_package()
+
+# Instalar scripts Python
+catkin_install_python(PROGRAMS
+  nodes/main_node.py
+  nodes/sensor_node.py
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+```
+
+## Arquivo main.launch
+
+```xml
+<?xml version="1.0"?>
+<launch>
+  <!-- Carregar parâmetros -->
+  <rosparam command="load" file="$(find {package_name})/config/params.yaml" />
+  
+  <!-- Iniciar nós -->
+  <node name="main_node" pkg="{package_name}" type="main_node.py" output="screen">
+    <param name="~rate" value="10" />
+  </node>
+  
+  <node name="sensor_node" pkg="{package_name}" type="sensor_node.py" output="screen" />
+  
+  <!-- Iniciar RViz (opcional) -->
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find {package_name})/rviz/config.rviz" />
+</launch>
+```
+
+## Compilação e Execução
+
+```bash
+# Compilar o projeto
+cd ~/catkin_ws
+catkin_make
+
+# Source para obter as variáveis de ambiente
+source devel/setup.bash
+
+# Lançar o projeto
+roslaunch {package_name} main.launch
+
+# Ou iniciar nó individual
+rosrun {package_name} main_node.py
+```
+
+## Dicas Importantes
+
+1. **ROS Workspace**: Mantenha seu código em `~/catkin_ws/src/`
+2. **Source**: Sempre execute `source devel/setup.bash` após compilar
+3. **Nomenclatura**: Use nomes em minúsculas com underscores
+4. **Logging**: Use `rospy.loginfo()`, `rospy.logerr()`, etc.
+5. **Parametrização**: Coloque configurações em arquivos YAML
+6. **Testes**: Crie testes unitários para seus nós
+
+## TODO: Estruture seu projeto aqui
+
+- [ ] Criar package.xml
+- [ ] Configurar CMakeLists.txt
+- [ ] Criar diretórios (nodes, scripts, launch, config)
+- [ ] Implementar nós principais
+- [ ] Criar arquivo launch
+- [ ] Documentar tópicos e parâmetros

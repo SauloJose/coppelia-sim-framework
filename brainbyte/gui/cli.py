@@ -10,6 +10,7 @@ from brainbyte.gui.auxF import *
 from brainbyte.utils.logging import *  
 from brainbyte.core.paths import *
 import traceback
+<<<<<<< HEAD
 try:
     import msvcrt
 except ImportError:
@@ -34,6 +35,8 @@ except ImportError:
         getch = _Getch()
 
     msvcrt = MockMsvcrt()
+=======
+>>>>>>> main
 
 import platform
 import subprocess
@@ -50,11 +53,55 @@ class brainGUI:
         self.config = {
             'cli_commands': False,
             'ros_connection': False,
-            'udp_connection': False 
+            'udp_connection': False,
+            'ros_projects': False
         }
+        # Carrega as configurações do config.json
+        self._load_config()
         # Carrega o arquivo de configuração de projetos
         self.pconfig_path = Path.cwd() / "brainbyte" / "utils" / "pconfig.json"
         self.pconfig = self._load_pconfig()
+
+    def _load_config(self):
+        """Carrega as configurações do config.json se existir."""
+        config_path = Path.cwd() / "config.json"
+        if config_path.exists():
+            try:
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config_data = json.load(f)
+                    # Atualiza apenas as chaves que existem no config
+                    for key in self.config:
+                        if key in config_data:
+                            self.config[key] = config_data[key]
+            except Exception as e:
+                self.logger.warning(f"Erro ao carregar config: {e}")
+
+    def _save_config(self):
+        """Salva as configurações no config.json."""
+        config_path = Path.cwd() / "config.json"
+        try:
+            # Carrega o config existente para manter outras chaves
+            config_data = {}
+            if config_path.exists():
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config_data = json.load(f)
+            
+            # Atualiza as configurações da GUI
+            config_data.update(self.config)
+            
+            # Salva de volta
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config_data, f, indent=4)
+        except Exception as e:
+            self.logger.error(f"Erro ao salvar config: {e}")
+
+    def _get_projects_folder(self):
+        """Retorna o caminho para a pasta de projetos baseado na configuração."""
+        if self.config.get('ros_projects', False):
+            return Path.cwd() / "ROSProjects"
+        else:
+            return Path.cwd() / "projects"
+
 
     def _load_description(self, description_path):
         """Carrega a descrição de um arquivo description.txt."""
@@ -70,18 +117,18 @@ class brainGUI:
 
     def _get_topic_description(self, topic_name):
         """Retorna a descrição de um tópico do arquivo description.txt na pasta do tópico."""
-        desc_path = Path.cwd() / "projects" / topic_name / "description.txt"
+        desc_path = self._get_projects_folder() / topic_name / "description.txt"
         return self._load_description(desc_path)
 
     def _get_project_description(self, topic_name, project_name):
         """Retorna a descrição de um projeto do arquivo description.txt na pasta do projeto."""
-        desc_path = Path.cwd() / "projects" / topic_name / project_name / "description.txt"
+        desc_path = self._get_projects_folder() / topic_name / project_name / "description.txt"
         return self._load_description(desc_path)
 
     def _save_topic_description(self, topic_name, description):
         """Salva a descrição de um tópico no arquivo description.txt."""
         try:
-            desc_path = Path.cwd() / "projects" / topic_name / "description.txt"
+            desc_path = self._get_projects_folder() / topic_name / "description.txt"
             desc_path.parent.mkdir(parents=True, exist_ok=True)
             with open(desc_path, 'w', encoding='utf-8') as f:
                 f.write(description)
@@ -91,7 +138,7 @@ class brainGUI:
     def _save_project_description(self, topic_name, project_name, description):
         """Salva a descrição de um projeto no arquivo description.txt."""
         try:
-            desc_path = Path.cwd() / "projects" / topic_name / project_name / "description.txt"
+            desc_path = self._get_projects_folder() / topic_name / project_name / "description.txt"
             desc_path.parent.mkdir(parents=True, exist_ok=True)
             with open(desc_path, 'w', encoding='utf-8') as f:
                 f.write(description)
@@ -382,6 +429,7 @@ class brainGUI:
             f"Comandos por CLI      [{'x' if self.config['cli_commands'] else ' '}]",
             f"Conectar com ROS      [{'x' if self.config['ros_connection'] else ' '}]",
             f"Conectar com UDP      [{'x' if self.config['udp_connection'] else ' '}]",
+            f"Usar ROS Projects     [{'x' if self.config['ros_projects'] else ' '}]",
             "Voltar"
         ]
         
@@ -436,15 +484,20 @@ class brainGUI:
                         self.config['ros_connection'] = not self.config['ros_connection']
                     elif selected == 2:
                         self.config['udp_connection'] = not self.config['udp_connection']
+                    elif selected == 3:
+                        self.config['ros_projects'] = not self.config['ros_projects']
                         
                     # Atualiza as opções
                     opcoes[0] = f"Comandos por CLI      [{'x' if self.config['cli_commands'] else ' '}]"
                     opcoes[1] = f"Conectar com ROS      [{'x' if self.config['ros_connection'] else ' '}]"
                     opcoes[2] = f"Conectar com UDP      [{'x' if self.config['udp_connection'] else ' '}]"
+                    opcoes[3] = f"Usar ROS Projects     [{'x' if self.config['ros_projects'] else ' '}]"
                 elif key == 'ENTER':
-                    if selected == 3:  # Voltar
+                    if selected == 4:  # Voltar
+                        self._save_config()  # Salva as configurações ao sair
                         break
                 elif key == 'q':
+                    self._save_config()  # Salva as configurações ao sair
                     break
         finally:
             sys.stdout.write('\033[?25h')
@@ -492,11 +545,11 @@ class brainGUI:
                 termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
     def _list_topics(self):
-        """Lista as subpastas em 'projects/' que servem como categorias/tópicos."""
-        target_dir = Path.cwd() / "projects"
+        """Lista as subpastas em 'projects/' ou 'ROSProjects/' que servem como categorias/tópicos."""
+        target_dir = self._get_projects_folder()
         
         if not target_dir.exists() or not target_dir.is_dir():
-            self.logger.warning("A pasta 'projects' não foi encontrada.")
+            self.logger.warning(f"A pasta '{target_dir.name}' não foi encontrada.")
             return []
             
         topics = []
@@ -505,19 +558,18 @@ class brainGUI:
             if item.is_dir() and not item.name.startswith((".", "__")):
                 topics.append(item.name)
                 
-        return sorted(topics) #Retorna o nome das subpastas de projects/
+        return sorted(topics) #Retorna o nome das subpastas
     
-    def _list_projects_in_topic(self,topic_name):
-        """Lista as subpastas em 'projects/' que contêm um script .py correspondente"""
-        # Certifique-se que self.projects_folder aponta para a pasta 'projects'
-        target_dir = Path.cwd() / "projects" / topic_name #Diretório de procura
+    def _list_projects_in_topic(self, topic_name):
+        """Lista as subpastas que contêm um script .py correspondente"""
+        target_dir = self._get_projects_folder() / topic_name
         
         if not target_dir.exists() or not target_dir.is_dir():
-            self.logger.warning("A pasta 'projects' não foi encontrada.")
+            self.logger.warning(f"A pasta '{target_dir}' não foi encontrada.")
             return []
             
         projects = []
-        # Varre todos os itens dentro de projects/
+        # Varre todos os itens dentro da pasta de tópicos
         for item in target_dir.iterdir():
             # Critérios: É uma pasta? Não é oculta?
             if item.is_dir() and not item.name.startswith((".", "__")):
@@ -597,8 +649,9 @@ class brainGUI:
         self.logger.info(f"Iniciando projeto: {selected_topic}/{selected_project}")
         
         try:
-            # LÓGICA DE IMPORTAÇÃO: projects.NomeDaPasta.NomeDoArquivo
-            module_path = f"projects.{selected_topic}.{selected_project}.{selected_project}"
+            # LÓGICA DE IMPORTAÇÃO: projects/ROSProjects.NomeDaPasta.NomeDoArquivo
+            pasta_modulo = "ROSProjects" if self.config.get('ros_projects', False) else "projects"
+            module_path = f"{pasta_modulo}.{selected_topic}.{selected_project}.{selected_project}"
             module = importlib.import_module(module_path)
 
             importlib.reload(module)
@@ -607,19 +660,27 @@ class brainGUI:
             self.banner()
 
             if hasattr(module, 'app'):
-                BOT_print(f"O projeto '{selected_project}' ({selected_topic}) foi iniciado. "
-                        "Aguardando até 10 segundos pela resposta...", width=50)
-
-                status, info = self._run_module_app(module, timeout=10)
-
-                if status == 'timeout':
+                BOT_print("Verificando conexão com o CoppeliaSim...", width=50)
+                
+                # Verifica se o simulador está aberto ANTES de rodar
+                if not self._is_coppeliasim_running():
                     os.system('cls' if os.name == 'nt' else 'clear')
                     self.banner()
-                    BOT_print("O projeto não respondeu em 10 segundos. "
-                            "Verifique se o CoppeliaSim está rodando ou se o script trava ao conectar. "
-                            "Retornando ao menu...", width=55)
+                    BOT_print("Erro: O CoppeliaSim não está rodando na porta 23000.\n"
+                              "Abra o simulador e inicie a cena antes de rodar o projeto.", width=55)
                     get_key()
-                elif status == 'exception':
+                    return
+
+                os.system('cls' if os.name == 'nt' else 'clear')
+                self.banner()
+                BOT_print(f"O projeto '{selected_project}' foi iniciado com sucesso!\n"
+                          f"Acompanhe a execução no terminal e os gráficos na tela.\n"
+                          f"Pressione Ctrl+C para encerrar a simulação.", width=55)
+
+                # Executa com timeout=None para rodar na Thread Principal com segurança
+                status, info = self._run_module_app(module, timeout=None)
+
+                if status == 'exception':
                     e, tb = info
                     print("\n" + "="*50)
                     print("ERRO FATAL NO PROJETO:")
@@ -627,10 +688,10 @@ class brainGUI:
                     print("="*50 + "\n")
                     input("Pressione ENTER para voltar ao menu...")
                 else:
-                    # Sucesso: projeto terminou normalmente
+                    # Sucesso: terminou normalmente ou via Ctrl+C limpo
                     os.system('cls' if os.name == 'nt' else 'clear')
                     self.banner()
-                    BOT_print("Projeto finalizado.", width=40)
+                    BOT_print("Projeto finalizado com sucesso.", width=40)
                     get_key()
             else:
                 BOT_print(f"Erro: O arquivo '{selected_project}.py' não contém a função 'app()'.", width=45)
@@ -648,8 +709,8 @@ class brainGUI:
         self.banner()
         print(BOT_say("Vamos criar uma nova simulação!", width=65))
 
-        # Garante que a pasta projects exista
-        projects_dir = Path.cwd() / "projects"
+        # Garante que a pasta projects/ROSProjects exista
+        projects_dir = self._get_projects_folder()
         projects_dir.mkdir(parents=True, exist_ok=True)
 
         # ── Etapa 1: escolher tópico ──
@@ -769,8 +830,8 @@ class brainGUI:
             template_app = base_dir / "brainbyte" / "utils" / "basics" / "app.txt"
             template_scene = base_dir / "brainbyte" / "utils" / "basics" / "scene.ttt"
 
-            # Pasta destino
-            sim_folder = base_dir / "projects" / nome_topico_limpo / nome_aplicacao_limpo
+            # Pasta destino - usa o caminho correto baseado na configuração
+            sim_folder = self._get_projects_folder() / nome_topico_limpo / nome_aplicacao_limpo
             sim_folder.mkdir(parents=True, exist_ok=True)
 
             arquivo_py = f"{nome_aplicacao_limpo}.py"
@@ -800,9 +861,10 @@ class brainGUI:
                 self._save_project_description(nome_topico_limpo, nome_aplicacao_limpo, desc_projeto)
 
             # Feedback de sucesso
+            pasta_relativa = "ROSProjects" if self.config.get('ros_projects', False) else "projects"
             mensagem_sucesso = (
                 f"Simulação criada com sucesso!\n\n"
-                f"📁 Projeto salvo em: projects/{nome_topico_limpo}/{nome_aplicacao_limpo}/\n"
+                f"📁 Projeto salvo em: {pasta_relativa}/{nome_topico_limpo}/{nome_aplicacao_limpo}/\n"
                 f"📄 Script principal: {arquivo_py}\n"
                 f"📄 Cena do Coppelia: {arquivo_ttt}\n\n"
                 f"O arquivo criado irá abrir para edições!"
@@ -839,13 +901,25 @@ class brainGUI:
             sys.stdout.write('\033[?25l')
             sys.stdout.flush()
 
-    def _run_module_app(self, module, timeout=10):
+    def _run_module_app(self, module, timeout=None):
         """
-        Executa module.app() em uma thread separada, com timeout.
-        Retorna ('success', None) se terminou sem erros.
-        Retorna ('timeout', None) se excedeu o tempo.
-        Retorna ('exception', (exceção, traceback)) se houve erro.
+        Executa module.app(). Se timeout for None, roda diretamente na
+        Thread Principal para garantir compatibilidade com Matplotlib e Ctrl+C.
         """
+        import traceback
+
+        # Se não houver timeout, roda na Thread Principal (Nativo e Seguro)
+        if timeout is None:
+            try:
+                module.app()
+                return 'success', None
+            except KeyboardInterrupt:
+                # Captura o Ctrl+C caso o próprio app não o trate completamente
+                return 'success', None
+            except Exception as e:
+                return 'exception', (e, traceback.format_exc())
+
+        # Caso precise de timeout (Lógica antiga em thread secundária)
         import threading
         exception_info = None
         completed = threading.Event()
@@ -892,8 +966,9 @@ class brainGUI:
         os.system('cls' if os.name == 'nt' else 'clear')
         self.banner()
         print(BOT_say("Copiar projeto existente", width=60))
-        print(f"\n\033[90mOrigem: projects/{source_topic}/{source_project}\033[0m")
-        print(f"\033[90mDestino: projects/{nome_topico_destino}/<novo_nome>\033[0m\n")
+        pasta_relativa = "ROSProjects" if self.config.get('ros_projects', False) else "projects"
+        print(f"\n\033[90mOrigem: {pasta_relativa}/{source_topic}/{source_project}\033[0m")
+        print(f"\033[90mDestino: {pasta_relativa}/{nome_topico_destino}/<novo_nome>\033[0m\n")
 
         sys.stdout.write('\033[?25h')
         sys.stdout.flush()
@@ -913,8 +988,8 @@ class brainGUI:
             desc_original = desc_projeto
 
         base_dir = Path.cwd()
-        origem_path = base_dir / "projects" / source_topic / source_project
-        destino_path = base_dir / "projects" / nome_topico_destino / novo_nome_limpo
+        origem_path = self._get_projects_folder() / source_topic / source_project
+        destino_path = self._get_projects_folder() / nome_topico_destino / novo_nome_limpo
 
         if not origem_path.exists():
             self._exibir_texto_com_bot("Erro", f"Projeto de origem não encontrado:\n{origem_path}")
@@ -934,7 +1009,7 @@ class brainGUI:
 
             mensagem = (
                 f"Projeto copiado com sucesso!\n\n"
-                f"📍 Novo projeto: projects/{nome_topico_destino}/{novo_nome_limpo}/\n"
+                f"📍 Novo projeto: {pasta_relativa}/{nome_topico_destino}/{novo_nome_limpo}/\n"
                 f"📄 Script principal: {novo_nome_limpo}.py"
             )
             self._exibir_texto_com_bot("Cópia concluída", mensagem)
@@ -1232,7 +1307,7 @@ class brainGUI:
             return  # Usuário cancelou a seleção
 
         # Caminho completo da pasta do projeto
-        projeto_path = Path.cwd() / "projects" / selected_topic / selected_project
+        projeto_path = self._get_projects_folder() / selected_topic / selected_project
 
         # Confirmação via menu (Sim/Não)
         opcoes_confirmacao = [
@@ -1266,7 +1341,18 @@ class brainGUI:
                 "Erro",
                 f"Não foi possível deletar o projeto:\n{e}"
             )
-            
+
+    def __clear_all_window(self):
+        """
+            Garantir que a tela esteja completamente limpa
+        """ 
+        if os.name == 'nt':
+            os.system('cls')
+        else:
+            # \033[2J (limpa tela), \033[3J (limpa scrollback), \033[H (reseta cursor)
+            sys.stdout.write("\033[2J\033[3J\033[H")
+            sys.stdout.flush()
+
     # ---------- Loop principal ----------
     def run(self):
         """Método principal: exibe menu principal e despacha ações."""
@@ -1276,6 +1362,8 @@ class brainGUI:
             "Use as setas para navegar e Enter para selecionar."
         )
         while True:
+            self.__clear_all_window()
+
             opcoes_principal = [
                 "Iniciar simulação",      # 0
                 "Criar nova simulação",   # 1
@@ -1313,22 +1401,20 @@ class brainGUI:
                 self._menu_configuracoes()
             elif escolha == 6:   # Ajuda
                 self._exibir_texto_com_bot(
-                    "Ajuda",
                     "Aqui você encontra ajuda sobre as funcionalidades.\n"
                     "- Iniciar simulação: execute exemplos pré-programados.\n"
                     "- Criar nova simulação: crie suas próprias simulações.\n"
                     "- Deletar projeto: remova um projeto permanentemente.\n"
                     "- Navegar pelo projeto: explore a estrutura de arquivos.\n"
                     "- Configurações: ajuste opções do sistema.\n"
-                    "- Ver Logs: exibe os últimos registros de execução."
+                    "- Ver Logs: exibe os últimos registros de execução.",'Espero que tenha lhe ajudado.'
                 )
             elif escolha == 7:   # Sobre o sistema
                 self._exibir_texto_com_bot(
-                    "Sobre o BRAINBYTE",
                     "BRAINBYTE - Gerenciador de Infraestrutura de Robótica\n\n"
                     "Funcionalidades:\n"
                     "• Organização de scripts de simulação\n"
                     "• Interface CLI amigável com mascote bot\n"
                     "• Configurações flexíveis (CLI/ROS)\n"
-                    "• Estrutura modular pronta para expansão"
+                    "• Estrutura modular pronta para expansão",'Espero que tenha lhe ajudado.'
                 )

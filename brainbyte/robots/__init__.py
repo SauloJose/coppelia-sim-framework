@@ -5,7 +5,7 @@ from .arms import *
 
 # Robôs móveis
 from .movel.PioneerBot import *
-from .movel.robotino import *
+from .movel.Robotino import *
 from .movel.Manta import * 
 from .movel.TurtleBot import *
 

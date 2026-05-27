@@ -1,0 +1,115 @@
+# Guia de Parametrização ROS
+
+## O que é um Parâmetro?
+Um parâmetro é um valor de configuração que pode ser acessado e modificado
+por qualquer nó no ROS durante a execução.
+
+## Tipos de Parâmetros
+
+- `int` - Números inteiros
+- `float` - Números decimais
+- `str` - Texto
+- `bool` - Booleano
+- `list` - Lista de valores
+- `dict` - Dicionário de valores
+
+## Acessando Parâmetros em Python
+
+```python
+import rospy
+
+# Ler um parâmetro com valor padrão
+max_speed = rospy.get_param('~max_speed', default=1.0)
+
+# Ler um parâmetro obrigatório (erro se não existir)
+robot_name = rospy.get_param('robot_name')
+
+# Definir um parâmetro
+rospy.set_param('current_task', 'navigation')
+
+# Verificar se um parâmetro existe
+if rospy.has_param('motor_speed'):
+    speed = rospy.get_param('motor_speed')
+```
+
+## Arquivo de Configuração YAML
+
+Crie um arquivo `params.yaml` ou `config.yaml`:
+
+```yaml
+# Configurações do robot
+robot:
+  name: my_robot
+  max_speed: 1.5
+  min_speed: 0.1
+  
+# Configurações do sensor
+sensor:
+  lidar_rate: 10
+  camera_resolution: 640x480
+  
+# Configurações de controle
+control:
+  update_rate: 50
+  pid_kp: 0.5
+  pid_ki: 0.1
+  pid_kd: 0.2
+```
+
+## Launch File com Parâmetros
+
+```xml
+<?xml version="1.0"?>
+<launch>
+  <!-- Carregar arquivo de parâmetros -->
+  <rosparam command="load" file="$(find my_package)/config/params.yaml" />
+  
+  <!-- Ou definir parâmetros individuais -->
+  <param name="robot_name" value="my_robot" />
+  <param name="max_speed" value="1.5" />
+  
+  <!-- Lançar nó com parametrização privada -->
+  <node name="motor_controller" pkg="my_package" type="motor_node.py">
+    <param name="~pwm_max" value="255" />
+    <param name="~motor_pins" value="[4, 5, 6]" />
+  </node>
+</launch>
+```
+
+## Boas Práticas
+
+1. Use namespaces privados `~` para parâmetros específicos do nó
+2. Forneça valores padrão sensatos
+3. Documente cada parâmetro
+4. Use arquivos YAML para configs complexas
+5. Teste com diferentes valores de parâmetros
+
+## TODO: Defina os parâmetros do seu projeto aqui
+
+```
+Parâmetro 1: max_speed
+Tipo: float
+Valor padrão: 1.0
+Descrição: Velocidade máxima do robô em m/s
+
+Parâmetro 2: {param_name}
+Tipo: {type}
+Valor padrão: {default}
+Descrição: {description}
+```
+
+## Exemplo de Uso
+
+```python
+import rospy
+
+class RobotController:
+    def __init__(self):
+        # Ler configurações
+        self.max_speed = rospy.get_param('~max_speed', 1.0)
+        self.motor_pins = rospy.get_param('~motor_pins', [4, 5, 6])
+        self.update_rate = rospy.get_param('/control/update_rate', 50)
+        
+        rospy.loginfo(f"Max speed: {self.max_speed}")
+        rospy.loginfo(f"Motor pins: {self.motor_pins}")
+```

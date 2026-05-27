@@ -231,33 +231,27 @@ class DifferentialController:
         self.set_point = set_point    
         self.current_state = pos_init 
 
-        # Saídas de comando (inicializadas sem underscore para consistência)
+        # Saídas de comando
         self.v_cmd = 0.0
         self.w_cmd = 0.0 
 
-        self.v_max = 1
-        self.a_max = 3
-        self.w_max = 6
-        self.a_max = 6
+        # Limites dinâmicos (CORRIGIDO: alpha_max adicionado corretamente)
+        self.v_max = 1.0
+        self.a_max = 3.0
+        self.w_max = 6.0
+        self.alpha_max = 6.0
+
+        # invert front
+        self.inverted = False
         
     def set_SP(self, set_point):
-        """
-        Define um novo objetivo (Set Point) para o controlador perseguir.
-        """
+        """Define um novo objetivo (Set Point) para o controlador perseguir."""
         self.set_point = set_point
 
     @staticmethod
     @njit
     def _calc_logic(actual, set_point):
-        """
-        Cálculo puramente matemático das coordenadas polares de erro.
-        Usa @njit para ser compilado em código de máquina e rodar em microsegundos.
-        
-        Calcula:
-        - rho: Distância Euclidiana $\sqrt{\Delta x^2 + \Delta y^2}$
-        - alpha: Ângulo entre a frente do robô e a linha do objetivo
-        - beta: Ângulo entre a linha do objetivo e a orientação final
-        """
+        """Cálculo puramente matemático das coordenadas polares de erro."""
         dx = set_point[0] - actual[0]
         dy = set_point[1] - actual[1]
         theta = actual[2]
@@ -273,11 +267,7 @@ class DifferentialController:
         return rho, alpha, beta
 
     def set_parameters(self, k_rho, k_alpha, k_beta):
-        """
-        Permite atualizar os ganhos dinamicamente e valida as condições de estabilidade
-        de Lyapunov para evitar que o robô se comporte de forma errática.
-        """
-        # Condição de estabilidade: k_rho > 0, k_beta < 0, k_alpha > k_rho
+        """Atualiza os ganhos dinamicamente e valida as condições de estabilidade."""
         if k_rho <= 0 or k_beta >= 0:
             print("Aviso: Ganhos podem não garantir estabilidade (Recomendado: k_rho > 0, k_beta < 0)")
         
@@ -286,10 +276,10 @@ class DifferentialController:
         self.k_beta = k_beta
     
     def set_max_values(self, 
-                       v_max =1.0, 
+                       v_max = 1.0, 
                        a_max = 4.0, 
                        w_max = 10.0, 
-                       alpha_max =4.0):
+                       alpha_max = 4.0):
         self.v_max = v_max
         self.a_max = a_max 
         self.w_max = w_max 
@@ -303,34 +293,37 @@ class DifferentialController:
         theta_tol = 0.05
         
         direction = 1.0
+        self.inverted = False
+        
+        # Lógica de marcha à ré baseada na posição do alvo
         if alpha > np.pi/2 or alpha < -np.pi/2:
             direction = -1.0
+            self.inverted = True
             alpha = normalize_angle(alpha + np.pi)
-            beta = normalize_angle(beta + np.pi)
+            # CORREÇÃO: beta NÃO deve ser modificado aqui. 
+            # A orientação final desejada no mapa permanece a mesma.
 
         # 1. Velocidades Brutas baseadas no erro
         v_target = direction * self.k_rho * rho
         w_target = self.k_alpha * alpha + self.k_beta * beta
         
-        # 2. Tratamento de Chegada (sua lógica original mantida)
+        # 2. Tratamento de Chegada
         if rho < rho_tol:
             v_target = 0.0
             error_theta = normalize_angle(self.set_point[2] - actual_point[2])
             if abs(error_theta) < theta_tol:
-                w_target = 0.0
                 self.v_cmd, self.w_cmd = 0.0, 0.0
                 return 0.0, 0.0
             else:
                 w_target = 0.5 * error_theta
 
-        # 3. SATURAÇÃO DE VELOCIDADE (Limite máximo do motor)
+        # 3. SATURAÇÃO DE VELOCIDADE
         v_target = np.clip(v_target, -self.v_max, self.v_max)
         w_target = np.clip(w_target, -self.w_max, self.w_max)
 
-        # 4. SLEW RATE (Limite de Aceleração) - A "Mágica" que substitui o filtro
-        # Em vez de um filtro, dizemos: "A velocidade só pode mudar X por ciclo"
+        # 4. SLEW RATE (Limite de Aceleração)
         max_dv = self.a_max * dt
-        max_dw = self.alpha_max * dt # alpha_max aqui é aceleração angular
+        max_dw = self.alpha_max * dt 
 
         # Aplica o limite na variação da velocidade
         dv = np.clip(v_target - self.v_cmd, -max_dv, max_dv)
@@ -351,42 +344,43 @@ class OmnidirectionalController:
                  k_theta: float,
                  dt: float = 0.05):
         
-        # Ganhos do controlador (agora Cartesianos, não mais polares)
+        # Ganhos do controlador
         self.k_x = k_x
         self.k_y = k_y
         self.k_theta = k_theta
 
         # Estados
-        self.set_point = set_point    
-        self.current_state = pos_init 
+        self.set_point = np.asarray(set_point, dtype=np.float64)
+        self.current_state = np.asarray(pos_init, dtype=np.float64) 
+        self.dt = dt
 
-        # Comandos internos (agora temos vx e vy locais)
+        # Comandos internos
         self.vx_cmd = 0.0
         self.vy_cmd = 0.0
         self.w_cmd = 0.0 
 
-        # Limites (ajustados com o alpha_max corrigido)
+        # Limites
         self.v_max = 1.0
         self.w_max = 6.0
         self.a_max = 3.0
         self.alpha_max = 6.0
         
     def set_SP(self, set_point):
-        self.set_point = set_point
+        self.set_point = np.asarray(set_point, dtype=np.float64)
 
     @staticmethod
     @njit
     def _calc_errors(actual, set_point):
         """
         Cálculo puramente Cartesiano (Holonômico).
-        Retorna os erros nos eixos globais e o erro de orientação.
+        Retorna os erros nos eixos globais e o erro de orientação normalizado.
         """
         dx = set_point[0] - actual[0]
         dy = set_point[1] - actual[1]
         
-        # dtheta precisa do normalize_angle para não dar giros de 360 à toa
-        # dtheta = normalize_angle(set_point[2] - actual[2])
-        dtheta = set_point[2] - actual[2] # Simplificado, aplique sua função aqui
+        # Correção: Normalização do ângulo para o robô não dar giros bobos de 360°
+        dtheta = set_point[2] - actual[2]
+        dtheta = (dtheta + np.pi) % (2 * np.pi) - np.pi
         
         return dx, dy, dtheta
 
@@ -401,11 +395,14 @@ class OmnidirectionalController:
         self.w_max = w_max 
         self.alpha_max = alpha_max 
 
-    def get_control(self, actual_point: np.ndarray, dt: float = 0.05):
-        actual_point = np.asarray(actual_point)
+    def get_control(self, actual_point: np.ndarray, dt: float = None):
+        if dt is None:
+            dt = self.dt
+            
+        actual_point = np.asarray(actual_point, dtype=np.float64)
         dx, dy, dtheta = self._calc_errors(actual_point, self.set_point)
         
-        # Distância Euclidiana apenas para critério de parada
+        # Distância Euclidiana para critério de parada
         rho = np.sqrt(dx**2 + dy**2)
         
         rho_tol = 0.05
@@ -417,7 +414,6 @@ class OmnidirectionalController:
         w_target = self.k_theta * dtheta
 
         # 2. Rotação do Mundo para o Robô (Transformação de Referencial)
-        # É aqui que o comando vira algo que o robô entende no próprio chassi
         theta = actual_point[2]
         c = np.cos(theta)
         s = np.sin(theta)
@@ -425,14 +421,19 @@ class OmnidirectionalController:
         vx_local_target = vx_global_target * c + vy_global_target * s
         vy_local_target = -vx_global_target * s + vy_global_target * c
         
-        # 3. Tratamento de Chegada
+        # 3. Tratamento de Chegada Suave
+        # Em vez de zerar no tranco, zeramos o ALVO e deixamos o Slew Rate frear o robô respeitando a_max
         if rho < rho_tol:
             vx_local_target = 0.0
             vy_local_target = 0.0
-            if abs(dtheta) < theta_tol:
-                w_target = 0.0
-                self.vx_cmd, self.vy_cmd, self.w_cmd = 0.0, 0.0, 0.0
-                return np.array([0.0, 0.0]), 0.0
+        
+        if abs(dtheta) < theta_tol:
+            w_target = 0.0
+
+        # Condição de parada real: erro dentro da tolerância E robô efetivamente parado
+        if rho < rho_tol and abs(dtheta) < theta_tol and abs(self.vx_cmd) < 0.01 and abs(self.vy_cmd) < 0.01 and abs(self.w_cmd) < 0.01:
+            self.vx_cmd, self.vy_cmd, self.w_cmd = 0.0, 0.0, 0.0
+            return np.array([0.0, 0.0]), 0.0
 
         # 4. Saturação de Velocidade Linear (Vetor 2D)
         v_vector_target = np.array([vx_local_target, vy_local_target])
@@ -442,18 +443,85 @@ class OmnidirectionalController:
         
         w_target = np.clip(w_target, -self.w_max, self.w_max)
 
-        # 5. SLEW RATE (Sua lógica de Aceleração mantida para X, Y e Theta)
+        # 5. SLEW RATE VETORIAL (Correção da aceleração)
         max_dv = self.a_max * dt
         max_dw = self.alpha_max * dt 
 
-        dvx = np.clip(v_vector_target[0] - self.vx_cmd, -max_dv, max_dv)
-        dvy = np.clip(v_vector_target[1] - self.vy_cmd, -max_dv, max_dv)
+        # Calculamos a diferença vetorial de velocidade linear
+        dv_linear = v_vector_target - np.array([self.vx_cmd, self.vy_cmd])
+        dv_norm = np.linalg.norm(dv_linear)
+        
+        # Limita a aceleração mantendo a direção correta do movimento
+        if dv_norm > max_dv and dv_norm > 0:
+            dv_linear = dv_linear * (max_dv / dv_norm)
+
         dw = np.clip(w_target - self.w_cmd, -max_dw, max_dw)
 
-        # Atualiza o estado interno
-        self.vx_cmd += dvx
-        self.vy_cmd += dvy
+        # Atualiza o estado interno de comandos
+        self.vx_cmd += dv_linear[0]
+        dvy_linear = dv_linear[1]
+        self.vy_cmd += dvy_linear 
         self.w_cmd += dw
 
-        # Retorna o vetor de velocidade linear e o escalar angular
         return np.array([self.vx_cmd, self.vy_cmd]), self.w_cmd
+    
+class SimpleController:
+    def __init__(self, k_rho=0.8, k_alpha=1.5, v_max=0.5, w_max=1.0, tolerance=0.05):
+        # Ganhos Proporcionais
+        self.k_rho = k_rho
+        self.k_alpha = k_alpha
+        
+        # Limites dinâmicos
+        self.v_max = v_max
+        self.w_max = w_max
+        
+        # Tolerância de chegada para evitar a "Singularidade da Origem" (girar como pião)
+        self.tolerance = tolerance
+        
+        # Atributo essencial para evitar erros de escopo ao clicar no mapa
+        self.set_point = np.array([0.0, 0.0, 0.0])
+
+    def set_max_values(self, v_max=1.0, w_max=4.0, *args, **kwargs):
+        """Mantém a compatibilidade com a chamada padrão do TurtleBot."""
+        self.v_max = v_max
+        self.w_max = w_max
+
+    def get_control(self, actual_pos, target_point):
+        """Calcula comandos simples focados estritamente em avançar de frente."""
+        self.set_point = np.asarray(target_point)
+        
+        dx = self.set_point[0] - actual_pos[0]
+        dy = self.set_point[1] - actual_pos[1]
+        theta = actual_pos[2]
+
+        rho = np.hypot(dx, dy)
+        
+        # ZONA MORTA: Se estiver muito perto do alvo, desliga os motores e evita o giro infinito
+        if rho < self.tolerance:
+            return 0.0, 0.0
+
+        # Ângulo direto para o alvo em relação à frente do robô
+        alpha = np.arctan2(dy, dx) - theta
+        
+        # Normalização do ângulo estritamente entre [-pi, pi]
+        alpha = (alpha + np.pi) % (2 * np.pi) - np.pi
+
+        # Suavização da transição: 
+        # Em vez de um corte brusco (if > 60 graus), aplicamos uma redução 
+        # gradual da velocidade linear conforme o robô perde o alinhamento.
+        
+        if abs(alpha) > (np.pi / 2):
+            # Se o alvo estiver a mais de 90 graus (atrás), só gira
+            v_target = 0.0
+            w_target = self.k_alpha * alpha
+        else:
+            # Controle proporcional. O cosseno(alpha) faz a velocidade linear 
+            # diminuir naturalmente em curvas fechadas e aumentar em retas.
+            v_target = self.k_rho * rho * np.cos(alpha)
+            w_target = self.k_alpha * alpha
+
+        # Saturação de segurança
+        v_cmd = np.clip(v_target, 0.0, self.v_max) 
+        w_cmd = np.clip(w_target, -self.w_max, self.w_max)
+
+        return v_cmd, w_cmd

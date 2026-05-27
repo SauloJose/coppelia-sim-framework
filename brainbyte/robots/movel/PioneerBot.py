@@ -181,7 +181,7 @@ class PioneerBot(BaseBot):
         """Para as rodas."""
         super().stop()
         try:
-            self.set_wheel_velocity(0.0, 0.0)
+            self.direct_cin(0.0, 0.0)
         except Exception as e:
             print(f"[PionnerBot] Erro ao parar motores: {e}")
 
