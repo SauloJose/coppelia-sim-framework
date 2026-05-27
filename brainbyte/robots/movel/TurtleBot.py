@@ -32,7 +32,7 @@ class TurtleBot(BaseBot):
         #Velocidade máxima do robô
         # Velocidade máxima do chassi (linear e angular)
         self._v_max = 0.31                      # m/s
-        self._w_max = self._v_max / self._R     # rad/s  
+        self._w_max = 2*self._v_max / self._L     # rad/s  
 
         # Limite real das rodas (calculado a partir de v_max)
         self._wheel_max = self._v_max / self._R   # rad/s

@@ -47,12 +47,12 @@ class PathPlanning(BaseApp):
         
         self.control = DifferentialController(pos_init=position,
                                               set_point=self.target_point,
-                                              k_alpha=1.2,
+                                              k_alpha=1,
                                               k_beta=-0.05,
-                                              k_rho=0.3,
+                                              k_rho=0.2,
                                               dt=self.dt)  
 
-        self.control.set_max_values(v_max=self.robot._v_max*2/3, w_max=self.robot._w_max)
+        self.control.set_max_values(v_max=self.robot._v_max, w_max=self.robot._w_max)
             
         self.robot.add_control(control_name='AUTO_DIFF', control_instance=self.control)
         
