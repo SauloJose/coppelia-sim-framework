@@ -76,70 +76,85 @@ class SLAM(BaseApp):
     
     def define_plot_configs(self):
         """ Configurações de plot """
-        self.plot_counter = 0
-
-        plt.ion() # Ativa modo interativo
+        plt.ion() 
         self.fig, self.ax = plt.subplots(figsize=(8, 8))
         self.ax.set_aspect('equal')
         self.ax.set_xlim(-5, 5)
         self.ax.set_ylim(-5, 5)
 
-        # Plot dinâmico do robô e lidar atual
-        self.plot_lidar, = self.ax.plot([], [], 'b.', markersize=1.5, label='Lidar Atual', zorder=3)
-        self.plot_robot, = self.ax.plot([], [], 'ro', label='Robô', zorder=5)
-
+        self.plot_rays, = self.ax.plot([], [], color='red', alpha=0.12, linewidth=0.5, zorder=2)
+        
+        self.plot_lidar, = self.ax.plot([], [], 'r.', markersize=1.5, label='Lidar Atual', zorder=4)
+        
+        self.plot_robot, = self.ax.plot([], [], 'go', markersize=8, label='Robô', zorder=5)
         self.plot_robot_dir, = self.ax.plot([], [], color='b', linewidth=2, zorder=6, label='Direção')
 
+        # Legenda da nuvem preta
         self.ax.plot([], [], 'k.', markersize=1, label='Nuvem Acumulada')
         
         self.ax.legend(loc='upper right')
         self.ax.grid(True)
 
-    def loop(self, t, actual_state=None):
-        """ Etapas do loop"""
-        try:
-            #Controlador manual
-            v_target,w_target = self.control.get_command()
-            
-            ### Filtro passa baixa para o comando (tau.dv/dt + v = v_desjado) 
-            alpha = self.dt / self.tau   # fator de mistura
+    def update_graphics(self, data_sensor, pos):
+        """ Função exclusiva para processar e renderizar os gráficos """
+        tempo_atual = self.simu_time()
+        
+        # 1. Atualiza a Nuvem de Pontos Acumulada (Preta) a cada 0.5s
+        if tempo_atual - self.last_save_time >= self.dP_cloud_time:
+            self.buffer.add(data_sensor)
+            self.last_save_time = tempo_atual
+            self.ax.plot(data_sensor[:, 0], data_sensor[:, 1], 'k.', markersize=1, zorder=1)
 
-            # Aproximação de euler (v[k+1] = v[k] + alpha * (v_max - v[comando])): 
+        # 2. OTIMIZAÇÃO CRÍTICA: Desenha todos os feixes de laser usando uma única linha com np.nan
+        num_points = len(data_sensor)
+        rays_x = np.empty(3 * num_points)
+        rays_y = np.empty(3 * num_points)
+        
+        rays_x[0::3] = pos[0]               # Origem X (Robô)
+        rays_x[1::3] = data_sensor[:, 0]    # Destino X (Lidar)
+        rays_x[2::3] = np.nan               # Desconecta a linha
+        
+        rays_y[0::3] = pos[1]               # Origem Y (Robô)
+        rays_y[1::3] = data_sensor[:, 1]    # Destino Y (Lidar)
+        rays_y[2::3] = np.nan               # Desconecta a linha
+        
+        self.plot_rays.set_data(rays_x, rays_y)
+
+        # 3. Atualiza os pontos instantâneos do Lidar (Vermelho)
+        self.plot_lidar.set_data(data_sensor[:, 0], data_sensor[:, 1])
+        
+        # 4. Atualiza a posição do Robô (Verde)
+        self.plot_robot.set_data([pos[0]], [pos[1]])
+        
+        # 5. Atualiza a linha de direção do Robô (Azul)
+        dx = self.robot._L * np.cos(pos[2])
+        dy = self.robot._L * np.sin(pos[2])
+        self.plot_robot_dir.set_data([pos[0], pos[0] + dx], [pos[1], pos[1] + dy])
+
+        # 6. Atualiza a tela do Matplotlib
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
+
+    def loop(self, t, actual_state=None):
+        """ Etapas do loop - Focado em controle e dados """
+        try:
+            # Controlador manual e Filtro Passa-Baixa
+            v_target, w_target = self.control.get_command()
+            alpha = self.dt / self.tau   
             self.v_cmd += alpha * (v_target - self.v_cmd)
             self.w_cmd += alpha * (w_target - self.w_cmd)
 
-            self.robot.set_wheel_velocity(linear_vel=self.v_cmd,angular_vel=self.w_cmd)
+            # Atua nos motores
+            self.robot.set_wheel_velocity(linear_vel=self.v_cmd, angular_vel=self.w_cmd)
 
-            #Puxa dados dos sensores e salva
-            data_sensor = self.robot.get_sensor(sensor_name='LIDAR').update() #Puxando dados do LIDAR
-            
-
-            tempo_atual = self.simu_time()
-            if tempo_atual - self.last_save_time >= self.dP_cloud_time:
-                self.buffer.add(data_sensor)
-                self.last_save_time = tempo_atual
-                
-                cx = data_sensor[:, 0]
-                cy = data_sensor[:, 1]
-                self.ax.plot(cx, cy, 'k.', markersize=1, zorder=2)
-
-            self.plot_counter += 1
-            #if self.plot_counter % 2 == 0:
-            lx = data_sensor[:,0]
-            ly = data_sensor[:,1]
-            self.plot_lidar.set_data(lx, ly)
-            
+            # Coleta dados de Telemetria (Sensores e Pose)
+            data_sensor = self.robot.get_sensor(sensor_name='LIDAR').update() 
             pos = self.robot.pose
-            self.plot_robot.set_data([pos[0]], [pos[1]])
-            dx = self.robot._L * np.cos(pos[2])
-            dy = self.robot._L * np.sin(pos[2])
-            self.plot_robot_dir.set_data([pos[0], pos[0] + dx], [pos[1], pos[1] + dy])
 
-            self.fig.canvas.draw()
-            self.fig.canvas.flush_events()
+            # Delega toda a parte visual para a função especialista externa
+            self.update_graphics(data_sensor, pos)
 
         except Exception as e:
-            # CHAVES DUPLAS AQUI:
             self.logger.error(f"Erro detected in loop(): {e}")
 
     def stop(self):
@@ -150,13 +165,39 @@ class SLAM(BaseApp):
             plt.ioff()
             self.logger.info(f"Simulação finalizada. Uso do Buffer: {self.buffer._total_count} pontos.")
             
-            diretorio_projeto = os.path.dirname(os.path.abspath(sys.argv[0]))
-            caminho_final = os.path.join(diretorio_projeto, 'point_cloud.png')
+            # Verifica se há pontos salvos para evitar erros
+            if self.buffer._total_count > 0:
+                self.logger.info("Gerando e salvando a imagem apenas com a nuvem de pontos...")
+                
+                # Extrai todos os pontos acumulados
+                pontos = self.buffer.get_all() # ou .get_points() caso a biblioteca use esse nome
+                cx = pontos[:, 0]
+                cy = pontos[:, 1]
+                
+                # Cria uma NOVA figura exclusiva para salvar a nuvem
+                fig_cloud, ax_cloud = plt.subplots(figsize=(8, 8))
+                ax_cloud.set_aspect('equal')
+                
+                # Plota apenas os pontos acumulados em preto
+                ax_cloud.plot(cx, cy, 'k.', markersize=1)
+                
+                # Formatações opcionais para a imagem ficar bonita
+                ax_cloud.grid(True)
+                ax_cloud.set_title("Nuvem de Pontos Acumulada")
+                ax_cloud.set_xlabel("X (metros)")
+                ax_cloud.set_ylabel("Y (metros)")
+                
+                # Define o caminho de salvamento na mesma pasta do módulo
+                diretorio_modulo = os.path.dirname(os.path.abspath(__file__))
+                caminho_final = os.path.join(diretorio_modulo, 'point_cloud.png')
+                
+                # Salva apenas esta figura limpa
+                fig_cloud.savefig(caminho_final, dpi=300, bbox_inches='tight')
+                self.logger.info(f"Nuvem de pontos salva com sucesso em: {caminho_final}")
+                
+            else:
+                self.logger.warning("Nenhum ponto no buffer para gerar a imagem.")
             
-            self.fig.savefig(caminho_final, dpi=300, bbox_inches='tight')
-            self.logger.info(f"Gráfico salvo com sucesso em: {caminho_final}")
-            
-            # Mostra o resultado final até que a janela seja fechada pelo usuário
             plt.show()
             
         except Exception as e:
