@@ -1,0 +1,1 @@
+Mapeamento do Ambiente utilizando dados de uma núvem pontos vindos de um sensor Lidar. A lógica aqui é utilizar uma grade de ocupação, considerando a incerteza na posição do robô e a incerteza dos sensores. Além disso a reconstrução e tomada de ponto em ponto.

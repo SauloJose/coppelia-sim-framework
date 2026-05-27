@@ -1,0 +1,1 @@
+Aqui estão os projetos para controle e locomoção de drones utilizando o Coppelia, seguindo diversas estratégias de controle.

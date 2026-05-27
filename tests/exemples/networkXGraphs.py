@@ -3,12 +3,23 @@ import matplotlib.pyplot as plt
 import networkx as nx
 from shapely.geometry import Polygon, LineString
 
-# Mesmo cenário do exemplo anterior
+# Cenário expandido com 10 obstáculos
 inicio = (1.0, 1.0)
 alvo = (9.0, 8.0)
-obs1 = Polygon([(3, 2), (5, 2), (5, 6), (3, 6)])
-obs2 = Polygon([(6, 4), (8, 4), (8, 9), (6, 9)])
-obstaculos = [obs1, obs2]
+
+# Definição dos 10 polígonos (misturando retângulos e triângulos)
+obs1 = Polygon([(3.0, 2.0), (5.0, 2.0), (5.0, 4.0), (3.0, 4.0)])
+obs2 = Polygon([(6.0, 4.0), (8.0, 4.0), (8.0, 6.0), (6.0, 6.0)])
+obs3 = Polygon([(1.0, 5.0), (2.5, 5.0), (2.5, 7.0), (1.0, 7.0)])
+obs4 = Polygon([(4.0, 7.0), (5.5, 7.0), (5.5, 9.0), (4.0, 9.0)])
+obs5 = Polygon([(7.0, 1.0), (9.0, 1.0), (8.0, 3.0)])
+obs6 = Polygon([(0.5, 3.0), (2.0, 3.0), (2.0, 4.0), (0.5, 4.0)])
+obs7 = Polygon([(3.5, 0.5), (4.5, 0.5), (4.5, 1.5), (3.5, 1.5)])
+obs8 = Polygon([(5.5, 2.5), (6.5, 2.5), (6.5, 3.5), (5.5, 3.5)])
+obs9 = Polygon([(8.5, 4.5), (9.5, 4.5), (9.5, 6.5), (8.5, 6.5)])
+obs10 = Polygon([(1.5, 8.5), (3.5, 8.5), (2.5, 9.5)])
+
+obstaculos = [obs1, obs2, obs3, obs4, obs5, obs6, obs7, obs8, obs9, obs10]
 
 nos = [inicio, alvo]
 for obs in obstaculos:
