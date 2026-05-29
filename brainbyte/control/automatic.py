@@ -213,7 +213,12 @@ class On_Off_Controller:
             # Se o erro estiver dentro da banda de histerese, a saída anterior é mantida
 
         return self.output
-    
+
+@njit
+def normalize_angle(angle):
+    """Normaliza ângulo para [-pi, pi]"""
+    return np.arctan2(np.sin(angle), np.cos(angle))
+
 class DifferentialController:
     def __init__(self, pos_init: np.ndarray,
                  set_point: np.ndarray,
@@ -222,26 +227,15 @@ class DifferentialController:
                  k_beta: float,
                  dt: float = 0.05):
         
-        # Ganhos do controlador
         self.k_rho = k_rho
         self.k_alpha = k_alpha
         self.k_beta = k_beta
 
-        # Estados
         self.set_point = set_point    
         self.current_state = pos_init 
 
-        # Saídas de comando
         self.v_cmd = 0.0
         self.w_cmd = 0.0 
-
-        # Limites dinâmicos (CORRIGIDO: alpha_max adicionado corretamente)
-        self.v_max = 1.0
-        self.a_max = 3.0
-        self.w_max = 6.0
-        self.alpha_max = 6.0
-
-        # invert front
         self.inverted = False
         
     def set_SP(self, set_point):
@@ -251,126 +245,123 @@ class DifferentialController:
     @staticmethod
     @njit
     def _calc_logic(actual, set_point):
-        """Cálculo puramente matemático das coordenadas polares de erro."""
+        """Cálculo das coordenadas polares de erro."""
         dx = set_point[0] - actual[0]
         dy = set_point[1] - actual[1]
         theta = actual[2]
+        theta_des = set_point[2]
 
+        # Distância ao objetivo
         rho = np.sqrt(dx**2 + dy**2)
         
-        # Alpha: ângulo para o objetivo em relação à frente do robô
-        alpha = normalize_angle(np.arctan2(dy, dx) - theta)
+        # Ângulo para o objetivo em relação ao frame global
+        goal_angle = np.arctan2(dy, dx)
         
-        # Beta: ajuste da orientação final
-        beta = normalize_angle(set_point[2] - theta - alpha)
+        # Alpha: ângulo para o objetivo em relação à frente do robô
+        alpha = normalize_angle(goal_angle - theta)
+        
+        # Beta: orientação desejada relativa ao vetor goal_angle
+        beta = normalize_angle(theta_des - goal_angle)
         
         return rho, alpha, beta
-
+    
+    def set_max_values(self, v_max, w_max):
+        pass 
+    
     def set_parameters(self, k_rho, k_alpha, k_beta):
-        """Atualiza os ganhos dinamicamente e valida as condições de estabilidade."""
-        if k_rho <= 0 or k_beta >= 0:
-            print("Aviso: Ganhos podem não garantir estabilidade (Recomendado: k_rho > 0, k_beta < 0)")
+        """Atualiza os ganhos e valida condições de estabilidade."""
+        if k_rho <= 0:
+            print("Aviso: k_rho deve ser > 0 para estabilidade")
+        if k_beta < 0:
+            print("Aviso: k_beta > 0 geralmente recomendado para estabilidade")
+        if k_alpha - k_rho <= 0:
+            print("Aviso: k_alpha > k_rho recomendado para estabilidade")
         
         self.k_rho = k_rho
         self.k_alpha = k_alpha
         self.k_beta = k_beta
-    
-    def set_max_values(self, 
-                       v_max = 1.0, 
-                       a_max = 4.0, 
-                       w_max = 10.0, 
-                       alpha_max = 4.0):
-        self.v_max = v_max
-        self.a_max = a_max 
-        self.w_max = w_max 
-        self.alpha_max = alpha_max 
 
     def get_control(self, actual_point: np.ndarray, dt: float = 0.05):
-        actual_point = np.asarray(actual_point)
+        """
+        Calcula comandos de velocidade para o robô diferencial.
+        """
+        actual_point = np.asarray(actual_point, dtype=np.float64)
         rho, alpha, beta = self._calc_logic(actual_point, self.set_point)
         
-        rho_tol = 0.05
-        theta_tol = 0.05
+        # Tolerâncias para critério de parada
+        rho_tol = 0.05      # 5cm
+        theta_tol = 0.05    # ~3 graus
         
-        direction = 1.0
-        self.inverted = False
-        
-        # Lógica de marcha à ré baseada na posição do alvo
-        if alpha > np.pi/2 or alpha < -np.pi/2:
-            direction = -1.0
-            self.inverted = True
-            alpha = normalize_angle(alpha + np.pi)
-            # CORREÇÃO: beta NÃO deve ser modificado aqui. 
-            # A orientação final desejada no mapa permanece a mesma.
-
-        # 1. Velocidades Brutas baseadas no erro
-        v_target = direction * self.k_rho * rho
-        w_target = self.k_alpha * alpha + self.k_beta * beta
-        
-        # 2. Tratamento de Chegada
+        # Verifica critério de parada primeiro
         if rho < rho_tol:
-            v_target = 0.0
+            # Erro de orientação final
             error_theta = normalize_angle(self.set_point[2] - actual_point[2])
+            
             if abs(error_theta) < theta_tol:
-                self.v_cmd, self.w_cmd = 0.0, 0.0
+                # Objetivo completamente alcançado
+                self.v_cmd = 0.0
+                self.w_cmd = 0.0
                 return 0.0, 0.0
             else:
-                w_target = 0.5 * error_theta
+                # Apenas corrige orientação (controle puro de rotação)
+                self.v_cmd = 0.0
+                self.w_cmd = self.k_alpha * error_theta
+                return self.v_cmd, self.w_cmd
+        else:
+            # Implementação simplificada e estável:
+            v_target = self.k_rho * rho * np.cos(alpha)
+            
+            # Termo de rotação com saturação suave para evitar singularidade em alpha=0
+            if abs(alpha) > 0.001:
+                sinc_term = np.sin(alpha) / alpha
+            else:
+                sinc_term = 1.0  # limite quando alpha -> 0
+                
+            w_target = self.k_alpha * alpha + self.k_rho * sinc_term * np.cos(alpha) * (alpha + self.k_beta * beta)
 
-        # 3. SATURAÇÃO DE VELOCIDADE
-        v_target = np.clip(v_target, -self.v_max, self.v_max)
-        w_target = np.clip(w_target, -self.w_max, self.w_max)
-
-        # 4. SLEW RATE (Limite de Aceleração)
-        max_dv = self.a_max * dt
-        max_dw = self.alpha_max * dt 
-
-        # Aplica o limite na variação da velocidade
-        dv = np.clip(v_target - self.v_cmd, -max_dv, max_dv)
-        dw = np.clip(w_target - self.w_cmd, -max_dw, max_dw)
-
-        # Atualiza o estado de comando interno
-        self.v_cmd += dv
-        self.w_cmd += dw
+        # Atualiza diretamente as velocidades sem filtros de aceleração ou clip de velocidade máxima
+        self.v_cmd = v_target
+        self.w_cmd = w_target
 
         return self.v_cmd, self.w_cmd
     
+    def get_state(self):
+        """Retorna o estado atual do controlador para debug"""
+        return {
+            'set_point': self.set_point,
+            'v_cmd': self.v_cmd,
+            'w_cmd': self.w_cmd,
+            'inverted': self.inverted,
+            'gains': (self.k_rho, self.k_alpha, self.k_beta)
+        }
+
 
 class OmnidirectionalController:
-    def __init__(self, pos_init: np.ndarray,
-                 set_point: np.ndarray,
+    def __init__(self, set_point: np.ndarray,
                  k_x: float,
                  k_y: float,
                  k_theta: float,
-                 dt: float = 0.05):
+                 rho_tol: float = 0.05,    # Tolerância linear padrão (ex: 5 cm)
+                 theta_tol: float = 0.05): # Tolerância angular padrão (ex: ~2.8 graus)
         
         # Ganhos do controlador
         self.k_x = k_x
         self.k_y = k_y
         self.k_theta = k_theta
 
+        # Tolerâncias (Zonas Mortas)
+        self.rho_tol = rho_tol
+        self.theta_tol = theta_tol
+
         # Estados
         self.set_point = np.asarray(set_point, dtype=np.float64)
-        self.current_state = np.asarray(pos_init, dtype=np.float64) 
-        self.dt = dt
 
-        # Comandos internos
-        self.vx_cmd = 0.0
-        self.vy_cmd = 0.0
-        self.w_cmd = 0.0 
-
-        # Limites
-        self.v_max = 1.0
-        self.w_max = 6.0
-        self.a_max = 3.0
-        self.alpha_max = 6.0
-        
-    def set_SP(self, set_point):
+    def set_SP(self, set_point: np.ndarray):
         self.set_point = np.asarray(set_point, dtype=np.float64)
 
     @staticmethod
     @njit
-    def _calc_errors(actual, set_point):
+    def _calc_errors(actual: np.ndarray, set_point: np.ndarray):
         """
         Cálculo puramente Cartesiano (Holonômico).
         Retorna os erros nos eixos globais e o erro de orientação normalizado.
@@ -378,92 +369,57 @@ class OmnidirectionalController:
         dx = set_point[0] - actual[0]
         dy = set_point[1] - actual[1]
         
-        # Correção: Normalização do ângulo para o robô não dar giros bobos de 360°
+        # Normalização do ângulo para o robô não dar giros de 360°
         dtheta = set_point[2] - actual[2]
         dtheta = (dtheta + np.pi) % (2 * np.pi) - np.pi
         
         return dx, dy, dtheta
 
-    def set_parameters(self, k_x, k_y, k_theta):
+    def set_parameters(self, k_x: float, k_y: float, k_theta: float):
         self.k_x = k_x
         self.k_y = k_y
         self.k_theta = k_theta
-    
-    def set_max_values(self, v_max=1.0, a_max=4.0, w_max=10.0, alpha_max=4.0):
-        self.v_max = v_max
-        self.a_max = a_max 
-        self.w_max = w_max 
-        self.alpha_max = alpha_max 
+        
+    def set_tolerances(self, rho_tol: float, theta_tol: float):
+        """Atualiza dinamicamente as margens de erro aceitáveis."""
+        self.rho_tol = rho_tol
+        self.theta_tol = theta_tol
 
-    def get_control(self, actual_point: np.ndarray, dt: float = None):
-        if dt is None:
-            dt = self.dt
-            
+    def get_control(self, actual_point: np.ndarray):
+        """
+        Calcula a ação de controle baseada no erro atual.
+        Retorna a velocidade linear local (np.array) e a velocidade angular.
+        """
         actual_point = np.asarray(actual_point, dtype=np.float64)
         dx, dy, dtheta = self._calc_errors(actual_point, self.set_point)
-        
-        # Distância Euclidiana para critério de parada
-        rho = np.sqrt(dx**2 + dy**2)
-        
-        rho_tol = 0.05
-        theta_tol = 0.05
 
-        # 1. Velocidades Globais baseadas no erro (Controle Proporcional)
-        vx_global_target = self.k_x * dx
-        vy_global_target = self.k_y * dy
+        # Distância Euclidiana (erro linear total)
+        rho = np.sqrt(dx**2 + dy**2)
+
+        # 1. Velocidades Globais baseadas no erro (Controle Proporcional Puro)
+        vx_global = self.k_x * dx
+        vy_global = self.k_y * dy
         w_target = self.k_theta * dtheta
 
-        # 2. Rotação do Mundo para o Robô (Transformação de Referencial)
+        # 2. Rotação do Mundo para o Robô (Matriz de Rotação Inversa)
         theta = actual_point[2]
         c = np.cos(theta)
         s = np.sin(theta)
 
-        vx_local_target = vx_global_target * c + vy_global_target * s
-        vy_local_target = -vx_global_target * s + vy_global_target * c
+        vx_local = vx_global * c + vy_global * s
+        vy_local = -vx_global * s + vy_global * c
         
-        # 3. Tratamento de Chegada Suave
-        # Em vez de zerar no tranco, zeramos o ALVO e deixamos o Slew Rate frear o robô respeitando a_max
-        if rho < rho_tol:
-            vx_local_target = 0.0
-            vy_local_target = 0.0
-        
-        if abs(dtheta) < theta_tol:
+        # 3. Zonas Mortas Independentes (Tratamento de Tolerância)
+        # Se a distância linear estiver ok, paramos os motores de translação.
+        if rho <= self.rho_tol:
+            vx_local = 0.0
+            vy_local = 0.0
+            
+        # Se a orientação estiver ok, paramos o giro.
+        if abs(dtheta) <= self.theta_tol:
             w_target = 0.0
 
-        # Condição de parada real: erro dentro da tolerância E robô efetivamente parado
-        if rho < rho_tol and abs(dtheta) < theta_tol and abs(self.vx_cmd) < 0.01 and abs(self.vy_cmd) < 0.01 and abs(self.w_cmd) < 0.01:
-            self.vx_cmd, self.vy_cmd, self.w_cmd = 0.0, 0.0, 0.0
-            return np.array([0.0, 0.0]), 0.0
-
-        # 4. Saturação de Velocidade Linear (Vetor 2D)
-        v_vector_target = np.array([vx_local_target, vy_local_target])
-        v_norm = np.linalg.norm(v_vector_target)
-        if v_norm > self.v_max:
-            v_vector_target = v_vector_target * (self.v_max / v_norm)
-        
-        w_target = np.clip(w_target, -self.w_max, self.w_max)
-
-        # 5. SLEW RATE VETORIAL (Correção da aceleração)
-        max_dv = self.a_max * dt
-        max_dw = self.alpha_max * dt 
-
-        # Calculamos a diferença vetorial de velocidade linear
-        dv_linear = v_vector_target - np.array([self.vx_cmd, self.vy_cmd])
-        dv_norm = np.linalg.norm(dv_linear)
-        
-        # Limita a aceleração mantendo a direção correta do movimento
-        if dv_norm > max_dv and dv_norm > 0:
-            dv_linear = dv_linear * (max_dv / dv_norm)
-
-        dw = np.clip(w_target - self.w_cmd, -max_dw, max_dw)
-
-        # Atualiza o estado interno de comandos
-        self.vx_cmd += dv_linear[0]
-        dvy_linear = dv_linear[1]
-        self.vy_cmd += dvy_linear 
-        self.w_cmd += dw
-
-        return np.array([self.vx_cmd, self.vy_cmd]), self.w_cmd
+        return np.array([vx_local, vy_local]), w_target
     
 class SimpleController:
     def __init__(self, k_rho=0.8, k_alpha=1.5, v_max=0.5, w_max=1.0, tolerance=0.05):

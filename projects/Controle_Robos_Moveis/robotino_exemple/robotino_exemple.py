@@ -12,14 +12,11 @@ class RobotinoSimu(BaseApp):
         super().__init__(scene_file="robotino.ttt",sim_name="robotino_exemple",sim_time=60)
 
     def setup(self):
-        """Configura os recurso da simulação"""
+        """Configura os recursos da simulação"""
         self.logger.info("Configurando o robô e os sensores")
 
         # Instancio o robô para abstrair comandos
-        self.robot = Robotino(bridge=self.bridge, 
-                            robot_name='robotino')
-        
-        position = self.robot.pose #(x,y,theta) -> Em versões futuras vou ajustar
+        self.robot = Robotino(bridge=self.bridge, robot_name='robotino')
         
         # Lista de waypoints (x, y, theta)
         self.list_pos = np.array([
@@ -33,49 +30,53 @@ class RobotinoSimu(BaseApp):
 
         self.it = 0
 
-        self.control = OmnidirectionalController(pos_init=position,
-                                                set_point=self.list_pos[0],
+        self.control = OmnidirectionalController(set_point=self.list_pos[0],
                                                 k_x=0.8,
-                                                k_y=-0.1,
-                                                k_theta=0.3,
-                                                dt = self.dt)  
+                                                k_y=0.8, 
+                                                k_theta=1,
+                                                rho_tol=0.05,
+                                                theta_tol=np.deg2rad(1))  
         
-        self.control.set_max_values(v_max = self.robot._v_max, 
-                                    w_max = self.robot._w_max)
-        
-        self.robot.add_control(control_name='AUTO_DIFF',
-                                control_instance=self.control)
+        self.robot.add_control(control_name='AUTO_OMNI', control_instance=self.control)
             
-
-        # PEGA OS CAMINHOS DO PRÓPRIO ROBÔ (Chassi e Motores)
         monitor_paths = self.robot.get_monitor_paths()
         actuator_paths = self.robot.get_actuator_paths()
     
         # Envia a lista de inicialização para a bridge
-        self.bridge.initialize(monitor_paths, actuator_paths,self.sim)
+        self.bridge.initialize(monitor_paths, actuator_paths, self.sim)
         self.logger.info("Handshake com a Bridge concluído!")
 
     def post_start(self):
         """ É executado logo quando inicia a simulação"""
         super().post_start()
         
-        # A leitura da pose deve ficar aqui, após o cache da bridge ser preenchido!
         pos = self.robot.pose
-        self.logger.info(f'Initial robot position: x={pos[0]:.2f}, y={pos[1]:.2f}')
+        if pos is not None:
+            self.logger.info(f'Posição inicial do robô: x={pos[0]:.2f}, y={pos[1]:.2f}, theta={np.rad2deg(pos[2]):.2f}º')
     
-    def loop(self, t,actual_state=None):
+    def loop(self, t, actual_state=None):
         try:
             actual_pos = self.robot.pose 
+            if actual_pos is None:
+                return # Evita quebrar o loop se a bridge pular um frame
 
+            controller = self.robot.get_control('AUTO_OMNI')
+            
+            v_cmd, w_cmd = controller.get_control(actual_point=actual_pos)
 
-            #v_cmd, w_cmd = self.robot.get_control('AUTO_DIFF').get_control(actual_point=actual_pos)
+            if v_cmd[0] == 0.0 and v_cmd[1] == 0.0 and w_cmd == 0.0:
+                if self.it < len(self.list_pos) - 1:
+                    self.it += 1
+                    novo_alvo = self.list_pos[self.it]
+                    controller.set_SP(novo_alvo)
+                    self.logger.info(f"Waypoint alcançado! Indo para waypoint {self.it}: {novo_alvo}")
+                else:
+                    pass 
 
-
-            self.robot.set_velocity_rot(linear_vel=[0,0.5], angular_vel=0)
-
+            self.robot.set_velocity_rot(linear_vel=v_cmd, angular_vel=w_cmd)
             
         except Exception as e:
-            self.logger.error(f"Erro detectado: {e}")
+            self.logger.error(f"Erro detectado no loop: {e}")
 
     def stop(self):
         """ Executado após a simulação terminar - parada segura"""

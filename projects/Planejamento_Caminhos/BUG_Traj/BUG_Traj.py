@@ -44,10 +44,13 @@ class BUG_Traj(BaseApp):
         self.target_point = np.array([position[0], position[1], position[2]])
         
         # Usando o controlador atualizado
-        self.control = SimpleController(k_rho=0.5,
-                                        k_alpha=1.5, 
-                                        v_max=0.3,
-                                        w_max=1.0)
+        self.control = DifferentialController(pos_init=position,
+                                      set_point=self.target_point,
+                                      k_alpha=3,
+                                      k_beta=-0.5,
+                                      k_rho=0.5,   
+                                      dt=self.dt)
+
 
         # Usando fallback seguro para os limites
         v_max_fallback = getattr(self.robot, '_v_max', 0.22)
@@ -58,8 +61,6 @@ class BUG_Traj(BaseApp):
         # =======================================================================================
         
         # Adicionando o planner atualizado
-        self.planner = BugPlanner(target_point=self.target_point, safety_distance=0.5)
-        
         # Configurações de plot
         self.define_plot_configs()
         self.command_lines()
@@ -98,6 +99,11 @@ class BUG_Traj(BaseApp):
         pos = self.robot.pose
         self.logger.info(f'Initial robot position: x={pos[0]:.2f}, y={pos[1]:.2f}, theta ={np.rad2deg(pos[2]):.2f}')
         self.target_point = np.array([pos[0], pos[1], pos[2]])
+        self.planner = BugPlanner(
+                        start_point=pos,
+                        target_point=self.target_point, 
+                        safety_distance=0.5)
+        
         self.control.set_point = self.target_point
         self.planner.target_point = np.array([pos[0], pos[1]])
         self.plot_target_marker.set_data([self.target_point[0]], [self.target_point[1]])
@@ -195,7 +201,8 @@ class BUG_Traj(BaseApp):
             obstacle_detected = bool(dst_front_min < self.planner.safety_distance)
 
             # 2. Controlador de alvo LIVRE 
-            v_goal, w_goal = self.control.compute(actual_pos=actual_pos, target_point=self.target_point)
+            v_goal, w_goal = self.control.get_control(actual_point=actual_pos, 
+                                                      dt = self.dt)
 
             # 3. BugPlanner atualizado com passagem de mapa (obstacles_data)
             v_cmd, w_cmd, state_status = self.planner.update(

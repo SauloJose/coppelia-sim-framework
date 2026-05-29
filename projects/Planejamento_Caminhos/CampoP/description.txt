@@ -1,0 +1,1 @@
+Algorítmo de campos  s para descrever e gerar trajetórias dinâmicas de modo reativo
