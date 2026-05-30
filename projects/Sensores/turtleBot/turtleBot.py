@@ -57,6 +57,8 @@ class turtleBot(BaseApp):
         self.w_cmd = 0
         self.tau   = 0.3
 
+        # Tempo para salvar os pontos no Point_Cloud 
+        self.dP_cloud_time = 1 #5 segundos
         self.define_plot_configs()
 
     def post_start(self):
@@ -98,7 +100,9 @@ class turtleBot(BaseApp):
 
             #Puxa dados dos sensores e salva
             data_sensor = self.robot.get_sensor(sensor_name='LIDAR').update() #Puxando dados do LIDAR
-            #self.buffer.add(data_sensor)
+            
+            if int(self.simu_time()) % self.dP_cloud_time == 0: #
+                self.buffer.add(data_sensor)
 
             # --- Atualiza plot do lidar com limite de FPS ---
             self.plot_counter += 1
@@ -117,17 +121,44 @@ class turtleBot(BaseApp):
             self.logger.error(f"Erro detected in loop(): {e}")
 
     def stop(self):
-        """ Executado após a simulação terminar - parada segura"""
+        """ Executado após a simulação terminar - parada segura """
         try:
             self.robot.stop()
-
+            
+            # Desativa o modo interativo e fecha a figura do loop em tempo real
             plt.ioff()
             plt.close(self.fig)
+            
             self.logger.debug(f"Buffer Usage: {self.buffer._total_count}")
             
+            if self.buffer._total_count > 0:
+                self.logger.info("Gerando plot final com os dados acumulados do LiDAR...")
+                
+                # Extrai os pontos acumulados do buffer 
+                pontos_acumulados = self.buffer.get_all() 
+                
+                # Separa as coordenadas X e Y
+                # Assumindo que o retorno seja um array Nx2 ou Nx3
+                x_pts = pontos_acumulados[:, 0]
+                y_pts = pontos_acumulados[:, 1]
+                
+                # Cria uma nova figura estática
+                plt.figure(figsize=(8, 8))
+                plt.scatter(x_pts, y_pts, s=1, c='blue', label='Nuvem de Pontos (LiDAR)')
+                plt.title('Mapeamento Final Acumulado')
+                plt.xlabel('X (metros)')
+                plt.ylabel('Y (metros)')
+                plt.axis('equal')
+                plt.grid(True)
+                plt.legend()
+                
+                # Mostra o gráfico e pausa a execução do script até você fechar a janela do gráfico
+                plt.show()
+            else:
+                self.logger.warning("Nenhum ponto foi acumulado no buffer para plotar.")
+            
         except Exception as e:
-            # CHAVES DUPLAS AQUI:
-            self.logger.error(f"Erro detected in stop(): {e}")
+            self.logger.error(f"Erro detectado em stop(): {e}")
     
 def app():
     """

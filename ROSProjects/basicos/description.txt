@@ -1,0 +1,1 @@
+Aprendendo a usar os critérios básicos e padrões do ROS2, para então utilizar nos projetos de robótica que é necessário. Inicialmente, precisa saber mexer em docker, mas é interessante.

@@ -1,0 +1,1 @@
+Este projeto se baseia simplesmente no controle mais básico possível de um drone, verificando sua dinâmica e visando entender o controle total dele.

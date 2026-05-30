@@ -13,5 +13,5 @@
     "cli_commands": false,
     "ros_connection": false,
     "udp_connection": false,
-    "ros_projects": false
+    "ros_projects": true
 }
