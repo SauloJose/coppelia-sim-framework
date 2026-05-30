@@ -207,7 +207,7 @@ class BaseApp:
 
     def post_start(self):
         """Executed right after startSimulation() (ideal for initial sensor capture)."""
-        pass
+        self.bridge.step() 
 
     def loop(self, t, actual_state = None): 
         """Executed at each simulation step (ideal for control logic and reading sensors)."""
