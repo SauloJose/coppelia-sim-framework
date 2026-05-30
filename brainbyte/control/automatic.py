@@ -409,8 +409,6 @@ class OmnidirectionalController:
         vx_local = vx_global * c + vy_global * s
         vy_local = -vx_global * s + vy_global * c
         
-        # 3. Zonas Mortas Independentes (Tratamento de Tolerância)
-        # Se a distância linear estiver ok, paramos os motores de translação.
         if rho <= self.rho_tol:
             vx_local = 0.0
             vy_local = 0.0
@@ -452,7 +450,6 @@ class SimpleController:
 
         rho = np.hypot(dx, dy)
         
-        # ZONA MORTA: Se estiver muito perto do alvo, desliga os motores e evita o giro infinito
         if rho < self.tolerance:
             return 0.0, 0.0
 
@@ -462,17 +459,12 @@ class SimpleController:
         # Normalização do ângulo estritamente entre [-pi, pi]
         alpha = (alpha + np.pi) % (2 * np.pi) - np.pi
 
-        # Suavização da transição: 
-        # Em vez de um corte brusco (if > 60 graus), aplicamos uma redução 
-        # gradual da velocidade linear conforme o robô perde o alinhamento.
-        
         if abs(alpha) > (np.pi / 2):
             # Se o alvo estiver a mais de 90 graus (atrás), só gira
             v_target = 0.0
             w_target = self.k_alpha * alpha
         else:
             # Controle proporcional. O cosseno(alpha) faz a velocidade linear 
-            # diminuir naturalmente em curvas fechadas e aumentar em retas.
             v_target = self.k_rho * rho * np.cos(alpha)
             w_target = self.k_alpha * alpha
 
