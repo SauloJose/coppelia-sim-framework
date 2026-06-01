@@ -1,0 +1,1 @@
+Aplicar o método de Rapidly-Exploring Random Tree (RRT) para o controle de um drone no CoppeliaSim, em 3D.

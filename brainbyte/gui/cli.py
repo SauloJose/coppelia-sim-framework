@@ -335,7 +335,7 @@ class brainGUI:
                     return "O arquivo de log está vazio no momento."
                 else:
                     # Pega as últimas 30 linhas
-                    ultimas_linhas = linhas[-30:]
+                    ultimas_linhas = linhas[-100:]
                     return "".join(ultimas_linhas)
         except Exception as e:
             return f"Erro ao tentar ler o arquivo de log:\n{e}"

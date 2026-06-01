@@ -42,6 +42,7 @@ class turtleBot(BaseApp):
         actuator_paths = self.robot.get_actuator_paths()
         self.bridge.initialize(monitor_paths, actuator_paths, self.sim)
 
+        self.logger.info(f"{monitor_paths} \n {actuator_paths}")
         # Controladores do robô
         v_max = 0.2
         w_max = np.deg2rad(20)

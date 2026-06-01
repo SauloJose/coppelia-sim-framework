@@ -139,6 +139,7 @@ class BaseApp:
 
             # Configuração inicial do usuário
             self.setup()
+            self.bridge.step()
             self.post_start()
             
             t = self.simu_time()
