@@ -1,0 +1,1 @@
+Rapidly-Exploring Random Tree (RRT), um algorítmo para gerar os caminhos por meio de uma árvore.

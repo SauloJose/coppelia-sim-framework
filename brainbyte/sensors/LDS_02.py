@@ -157,9 +157,13 @@ class LDS_02(BaseSensor):
         angles = np.arctan2(y, x)
 
         # Boolean masks matching specific geometric fields of view
-        mask_front = (angles > np.deg2rad(-15)) & (angles < np.deg2rad(15))
-        mask_left  = (angles >= np.deg2rad(15)) & (angles <= np.deg2rad(150))
-        mask_right = (angles >= np.deg2rad(-150)) & (angles <= np.deg2rad(-15))
+        # front = 30 degrees
+        # left = 120 
+        # right = 120
+        # back = 90
+        mask_front = (angles > np.deg2rad(-30)) & (angles < np.deg2rad(30))
+        mask_left  = (angles >= np.deg2rad(30)) & (angles <= np.deg2rad(150))
+        mask_right = (angles >= np.deg2rad(-150)) & (angles <= np.deg2rad(-30))
         mask_back  = (angles > np.deg2rad(150)) | (angles < np.deg2rad(-150))
 
         # Array slicing using boolean masks
