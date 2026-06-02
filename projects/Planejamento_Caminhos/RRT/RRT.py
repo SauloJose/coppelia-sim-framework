@@ -1,30 +1,64 @@
 import numpy as np
+import matplotlib
+# Garante o backend interativo para funcionar os cliques na tela
+matplotlib.use('TkAgg') 
+
 import matplotlib.pyplot as plt 
 import matplotlib.patches as patches
-import matplotlib.transforms as transforms
+import os
+import platform
+import subprocess
 
 from brainbyte import BaseApp
 from brainbyte.robots.movel.TurtleBot import *
-from brainbyte.control.automatic import * 
+from brainbyte.control.automatic import *
 from brainbyte.sensors.LDS_02 import *
 from brainbyte.utils.environment import *
-from brainbyte.planner.cells.makeCells import * #Importando o módulo de células
-from brainbyte.planner.path.astar import * #Importanto o Astar
+
+from brainbyte.planner.path.rrt import RRTPlanner
 
 class PathPlanning(BaseApp):
-    def __init__(self, show_lidar=True):
+    def __init__(self, show_lidar=False):
         super().__init__(scene_file="mapa.ttt", sim_name="PathPlanning", sim_time=120)
         self.obstacles_data = []
         self.show_lidar = show_lidar
-        self.bot_radius = 0.15 
+        self.bot_radius = 0.15
 
-        self.target_point = np.array([0.0, 0.0, 0.0])
-
-        #Rota do A*
+        self.target_point = None 
         self.waypoints = []
-        self.current_waypoint_idx =0 
+        self.current_waypoint_idx = 0 
+
+        # Parâmetros do RRT
+        self.max_iter = 2000
+        self.step_size = 0.5 
+        
+        self.plot_skip_counter = 0
 
     def setup(self):
+        # =====================================================================
+        # ENTRADA DE DADOS DO USUÁRIO PARA O RRT
+        # =====================================================================
+        self.logger.info("Aguardando configurações do usuário no terminal...")
+        print("\n--- CONFIGURAÇÕES DO RRT ---")
+        try:
+            iter_input = input("Digite o limite de tentativas (max_iter) [Padrão: 2000]: ")
+            self.max_iter = int(iter_input) if iter_input.strip() != "" else 2000
+
+            step_input = input("Digite o tamanho do passo (step_size) [Padrão: 0.5]: ")
+            self.step_size = float(step_input) if step_input.strip() != "" else 0.5
+
+            b_input = input("Digite a expansão dos objetos (raio do robô) [Padrão: 0.15]: ")
+            self.bot_radius = float(b_input) if b_input.strip() != "" else 0.15
+
+        except ValueError:
+            self.logger.warning("Entrada inválida detectada! Usando os valores padrão.")
+            self.max_iter = 2000
+            self.step_size = 0.5
+            self.bot_radius = 0.15
+            
+        print("----------------------------\n")
+        self.logger.info(f"Parâmetros RRT -> Max Iter: {self.max_iter}, Step: {self.step_size}")
+
         self.logger.info("Configuring Robot, Sensor and Controllers..")
 
         self.robot = TurtleBot(
@@ -41,10 +75,11 @@ class PathPlanning(BaseApp):
         monitor_paths = self.robot.get_monitor_paths()
         actuator_paths = self.robot.get_actuator_paths()
         self.bridge.initialize(monitor_paths, actuator_paths, self.sim)
+        self.bridge.step()
         
-        position = self.robot.pose
-        self.target_point = np.array([position[0], position[1], position[2]])
-        
+        position = self.robot.pose  
+        self.target_point = np.array([position[0], position[1], 0.0])
+
         self.control = DifferentialController(pos_init=position,
                                               set_point=self.target_point,
                                               k_alpha=1,
@@ -52,17 +87,13 @@ class PathPlanning(BaseApp):
                                               k_rho=0.15,
                                               dt=self.dt)  
 
-        self.control.set_max_values(v_max=self.robot._v_max, w_max=self.robot._w_max)
-            
         self.robot.add_control(control_name='AUTO_DIFF', control_instance=self.control)
         
-        # Grid inicializado como None (será construído dinamicamente pelas dimensões das paredes)
-        self.grid_map = None
-
+        self.rrt = None
         self.define_plot_configs()
-        self.command_lines()
 
     def on_map_click(self, event):
+        """Callback acionado quando o usuário clica no gráfico do Matplotlib"""
         if event.xdata is None or event.ydata is None:
             return
             
@@ -72,43 +103,49 @@ class PathPlanning(BaseApp):
         self.target_point = np.array([x_clicado, y_clicado, 0.0])
         self.plot_target_marker.set_data([x_clicado], [y_clicado])
         
-        if self.grid_map is not None:
+        self.logger.info(f"Novo ponto selecionado (X={x_clicado:.2f}, Y={y_clicado:.2f})... Procurando caminho...")
+        
+        if self.rrt is not None:
             pos_atual = self.robot.pose
+            start_2d = np.array([pos_atual[0], pos_atual[1]])
+            goal_2d = np.array([x_clicado, y_clicado])
             
-            self.logger.info("Invocando o módulo path_planner.py...")
-            # 1. Pega o caminho completo gerado pelo seu A* original
-            caminho_completo = astar(self.grid_map, pos_atual, self.target_point)
+            # Planeja a rota
+            caminho_rrt = self.rrt.find_path(start_2d, goal_2d)
             
-            if caminho_completo is not None:
-                self.logger.info(f"Rota calculada! {len(caminho_completo)} pontos no total.")
+            # 1. Atualiza o plot da Árvore gerada
+            xs, ys = [], []
+            if self.rrt.nodes:
+                for node in self.rrt.nodes:
+                    if node.parent is not None:
+                        xs.extend([node.x, node.parent.x, np.nan])
+                        ys.extend([node.y, node.parent.y, np.nan])
+            self.plot_tree.set_data(xs, ys)
+
+            # 2. Avalia o caminho encontrado
+            if caminho_rrt is not None and len(caminho_rrt) > 0:
+                self.logger.info("Caminho encontrado!")
+                caminho_array = np.array(caminho_rrt)
                 
-                # 2. Puxa apenas os pontos de curva/vértices usando sua função
-                vertices = simplify_path(caminho_completo)
+                dist_inicio = np.linalg.norm(caminho_array[0] - start_2d)
+                dist_fim = np.linalg.norm(caminho_array[-1] - start_2d)
+                if dist_inicio > dist_fim:
+                    caminho_array = caminho_array[::-1]
                 
-                # 3. O robô vai seguir o caminho simplificado (menos pontos/mais fluido)
-                self.waypoints = vertices.tolist()
+                self.waypoints = caminho_array.tolist()
                 self.current_waypoint_idx = 0
                 
-                # 4. Plota o caminho completo (linha contínua ciano)
-                self.plot_path.set_data(caminho_completo[:, 0], caminho_completo[:, 1])
-                
-                # 5. Plota os vértices (bolinhas amarelas para destacar onde o robô vira)
-                if not hasattr(self, 'plot_vertices'):
-                    # Cria o elemento dinamicamente se ele ainda não existir no plot
-                    self.plot_vertices, = self.ax.plot([], [], 'yo', markersize=6, label='Turning Points', zorder=5)
-                    self.ax.legend(loc='upper right')
-                
-                self.plot_vertices.set_data(vertices[:, 0], vertices[:, 1])
-                
+                self.plot_path.set_data(caminho_array[:, 0], caminho_array[:, 1])
+                self.plot_wp.set_data(caminho_array[:, 0], caminho_array[:, 1])
             else:
-                self.logger.warning("Não foi possível encontrar um caminho válido.")
-                self.plot_path.set_data([], [])
-                if hasattr(self, 'plot_vertices'):
-                    self.plot_vertices.set_data([], [])
+                self.logger.warning("Caminho não encontrado!")
                 self.waypoints = []
+                self.plot_path.set_data([], [])
+                self.plot_wp.set_data([], [])
 
-    def command_lines(self):
-        self.logger.warning("Aqui ainda será implementado uma lógica para entrar com variáveis para a simulação")
+            # CORREÇÃO: Atualiza a interface sem congelar o código
+            self.fig.canvas.draw_idle()
+            self.fig.canvas.flush_events()
 
     def post_start(self):
         super().post_start()
@@ -116,104 +153,70 @@ class PathPlanning(BaseApp):
 
         pos = self.robot.pose
         self.logger.info(f'Initial robot position: x={pos[0]:.2f}, y={pos[1]:.2f}, theta ={np.rad2deg(pos[2]):.2f}')
-        self.target_point = pos 
-        self.control.set_point = self.target_point
-        self.plot_target_marker.set_data([self.target_point[0]], [self.target_point[1]])
 
         self.bot_radius = get_robot_radius(self.sim, 'Turtlebot3/base_link')
 
-        # Desenha o contorno do Robô
         self.plot_robot_body = patches.Circle(
             (pos[0], pos[1]), radius=self.bot_radius,
-            edgecolor='r', facecolor='none', linewidth=2, label='Contorno do Robô', zorder=5
+            edgecolor='r', facecolor='none', linewidth=2, zorder=6
         )
         self.ax.add_patch(self.plot_robot_body)
-        
-        # Vetor de Direção do Robô
-        dx = self.bot_radius * np.cos(pos[2])*2
-        dy = self.bot_radius * np.sin(pos[2])*2
-        self.plot_robot_dir, = self.ax.plot(
-            [pos[0],pos[0]+dx], [pos[1],pos[1]+dy],
-            color='b', linewidth=2, zorder=6, label='Direção'
-        )
+        self.plot_robot_dir, = self.ax.plot([], [], color='b', linewidth=2, zorder=7)
 
-        # Captura os dados poligonais e as paredes do CoppeliaSim
         self.obstacles_data, self.boundary_vertices, _ = get_environment_obstacles(
-            self.sim, 
-            robot_radius=self.bot_radius,
-            wall_keywords=['cuboid'] 
+            self.sim, robot_radius=self.bot_radius
         )
         
-        # PROCESSAMENTO E MAPEAMENTO DO GRID DE OCUPAÇÃO (DINÂMICO)
         if self.boundary_vertices and len(self.boundary_vertices) > 0:
             boundary_np = np.array(self.boundary_vertices)
-            
-            # Extrai os limites reais com base nos vértices das paredes
             x_min, y_min = np.min(boundary_np, axis=0)
             x_max, y_max = np.max(boundary_np, axis=0)
-            
-            self.logger.info(f"Limites dinâmicos detectados -> X: [{x_min:.2f} a {x_max:.2f}], Y: [{y_min:.2f} a {y_max:.2f}]")
         else:
             x_min, x_max, y_min, y_max = -7.0, 7.0, -7.0, 7.0
-            self.logger.warning("Paredes não detectadas. Usando limites padrão (-7 a 7).")
 
-        # Ajusta as janelas de exibição do Matplotlib para enquadrar perfeitamente as paredes com margem de 0.5m
         self.ax.set_xlim(x_min - 0.5, x_max + 0.5)
         self.ax.set_ylim(y_min - 0.5, y_max + 0.5)
 
-        # Instancia e constrói a matriz de células
-        self.grid_map = GridMap(x_min=x_min, x_max=x_max, y_min=y_min, y_max=y_max, cell_size=0.1)
-        
-        self.logger.info("Discretizando ambiente em Grid de Ocupação...")
-        self.grid_map.build_grid(self.obstacles_data)
-        self.logger.info(f"Grid gerado com sucesso! Dimensões: {self.grid_map.matrix.shape}")
+        obstacles_list = []
+        for obs in self.obstacles_data:
+            v = obs['corners']
+            if v is not None and len(v) >= 3:
+                obstacles_list.append(v)
+                polygon_patch = patches.Polygon(v, closed=True, linewidth=1.5, edgecolor='#2c3e50', facecolor='#7f8c8d', alpha=0.7, zorder=3)
+                self.ax.add_patch(polygon_patch)
 
-        # Plota apenas a matriz de células (Ocupado = Escuro, Livre = Claro)
-        self.ax.imshow(
-            self.grid_map.matrix, 
-            origin='lower', 
-            extent=[self.grid_map.x_min, self.grid_map.x_max, self.grid_map.y_min, self.grid_map.y_max], 
-            cmap='Greys', 
-            alpha=0.35, 
-            zorder=1
+        self.rrt = RRTPlanner(
+            bounds=(x_min, x_max, y_min, y_max), 
+            obstacles=obstacles_list,
+            step_size=self.step_size,
+            max_iter=self.max_iter
         )
 
-        # Renderização visual APENAS da linha limite das Paredes Externas
         if self.boundary_vertices:
-            boundary_np = np.array(self.boundary_vertices)
-            polygon_boundary = patches.Polygon(
-                boundary_np, closed=True, linewidth=4,
-                edgecolor="#000000", facecolor='none', linestyle='-',
-                label='Paredes do Mapa', zorder=3
-            )
+            polygon_boundary = patches.Polygon(np.array(self.boundary_vertices), closed=True, linewidth=4, edgecolor="#000000", facecolor='none', zorder=4)
             self.ax.add_patch(polygon_boundary)
+        
+        # CORREÇÃO: Inicialização limpa da janela
+        plt.show(block=False)
+        self.fig.canvas.draw_idle()
+        self.fig.canvas.flush_events()
+        self.logger.info("Mapa gerado! CLIQUE em um ponto no mapa para o robô navegar.")
 
-        self.ax.legend(loc='upper right')
-            
     def define_plot_configs(self):
         plt.ion() 
         self.fig, self.ax = plt.subplots(figsize=(8, 8))
         self.ax.set_aspect('equal')
         
-        # Limites iniciais temporários (serão redefinidos dinamicamente no post_start)
-        self.ax.set_xlim(-7, 7)
-        self.ax.set_ylim(-7, 7)
-        
-        self.ax.set_title("Navegação e Planejamento de Caminhos", fontsize=14, pad=15)
+        self.ax.set_title("RRT Interativo: Clique para definir o objetivo", fontsize=13, pad=12)
         self.ax.set_xlabel("X (metros)")
         self.ax.set_ylabel("Y (metros)")
-        self.ax.grid(True, linestyle='--', alpha=0.3, zorder=0)
+        self.ax.grid(True, linestyle='--', alpha=0.2, zorder=0)
 
-        self.plot_robot_center, = self.ax.plot([], [], 'ro', markersize=4, zorder=6)
-        self.plot_target_marker, = self.ax.plot(
-            [self.target_point[0]], [self.target_point[1]], 
-            'g.', markersize=12, label='Objetivo Atual', zorder=7
-        )
-        self.plot_lidar, = self.ax.plot([], [], 'r.', markersize=2, alpha=0.6, label='Lidar', zorder=3)
-        
-        self.plot_path, = self.ax.plot([], [], 'c-', linewidth=2.5, label='Caminho A*', zorder=4)
+        self.plot_target_marker, = self.ax.plot([], [], 'g.', markersize=14, zorder=8)
+        self.plot_tree, = self.ax.plot([], [], color='#bdc3c7', linewidth=0.5, zorder=1)
+        self.plot_path, = self.ax.plot([], [], 'c-', linewidth=3.0, zorder=4)
+        self.plot_wp, = self.ax.plot([], [], 'yo', markersize=5, zorder=5)
 
-        self.ax.legend(loc='upper right')
         self.fig.canvas.mpl_connect('button_press_event', self.on_map_click)
 
     def loop(self, t, actual_state=None):
@@ -221,57 +224,51 @@ class PathPlanning(BaseApp):
             data_sensor = self.robot.get_sensor(sensor_name='LIDAR').update() 
             actual_pos = self.robot.pose 
 
-            # CONTROLADOR DE SEGUIMENTO DE CAMINHO (WAYPOINTS)
             if self.waypoints and self.current_waypoint_idx < len(self.waypoints):
                 ponto_alvo = self.waypoints[self.current_waypoint_idx]
-                
                 self.control.set_point = np.array([ponto_alvo[0], ponto_alvo[1], 0.0])
                 
                 dist_ao_ponto = np.sqrt((actual_pos[0] - ponto_alvo[0])**2 + (actual_pos[1] - ponto_alvo[1])**2)
                 
                 if dist_ao_ponto < 0.15:
                     self.current_waypoint_idx += 1
+                    
                     if self.current_waypoint_idx >= len(self.waypoints):
-                        self.logger.info("O robô chegou com sucesso ao destino final!")
+                        self.logger.info("O robô completou a rota RRT e chegou ao destino! Aguardando novo clique...")
+                        self.waypoints = [] 
+                        self.target_point = np.array([actual_pos[0], actual_pos[1], 0.0]) 
             else:
                 self.control.set_point = self.target_point
 
-            # Calcula e envia os comandos físicos de velocidade para os motores
-            v_cmd, w_cmd = self.robot.get_control('AUTO_DIFF').get_control(actual_point=actual_pos)
+            v_cmd, w_cmd = self.control.get_control(actual_point=actual_pos, dt=self.dt)
             self.robot.set_wheel_velocity(linear_vel=v_cmd, angular_vel=w_cmd)
-            
-            self.plot_result(ds=data_sensor, robot=self.robot, plot_lidar=self.show_lidar)
-            
+
+            # --- Atualiza a posição do Robô na Interface Gráfica ---
+            self.plot_skip_counter += 1
+            if self.plot_skip_counter % 3 == 0:
+                self.plot_robot_body.set_center((actual_pos[0], actual_pos[1]))
+                dx = self.bot_radius * np.cos(actual_pos[2]) * 2
+                dy = self.bot_radius * np.sin(actual_pos[2]) * 2
+                self.plot_robot_dir.set_data([actual_pos[0], actual_pos[0] + dx], [actual_pos[1], actual_pos[1] + dy])
+                
+                # CORREÇÃO CRÍTICA: Atualiza o plot e processa novos cliques SEM dar pause no código
+                self.fig.canvas.draw_idle()
+                self.fig.canvas.flush_events()
+
         except Exception as e:
             self.logger.error(f"Erro detectado no loop(): {e}")
-    
-    def plot_result(self, ds, robot, plot_lidar=True):
-        if plot_lidar and ds is not None and len(ds) > 0:
-            self.plot_lidar.set_data(ds[:, 0], ds[:, 1])
-        else:
-            self.plot_lidar.set_data([], [])
-        
-        pos = robot.pose
-        theta = pos[2]
-        
-        self.plot_robot_body.set_center((pos[0], pos[1]))
-        self.plot_robot_center.set_data([pos[0]], [pos[1]])
-        
-        dx = self.bot_radius * np.cos(theta)*2
-        dy = self.bot_radius * np.sin(theta)*2
-        self.plot_robot_dir.set_data([pos[0], pos[0] + dx], [pos[1], pos[1] + dy])
-        
-        self.fig.canvas.draw()
-        self.fig.canvas.flush_events()
 
     def stop(self):
         try:
             self.robot.stop()
             plt.ioff()
-            plt.close(self.fig)
+            plt.show()
         except Exception as e:
-            self.logger.error(f"Erro detectado in stop(): {e}")
+            self.logger.error(f"Erro no stop(): {e}")
     
 def app():
     aplicacao = PathPlanning(show_lidar=False)
     aplicacao.run()
+
+if __name__ == '__main__':
+    app()

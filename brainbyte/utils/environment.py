@@ -168,4 +168,98 @@ def get_robot_radius(sim, base_shape_name='Turtlebot3/base_link'):
     except Exception as e:
         return -1
         
-    return 0.15
+#========================== CONSIDERANDO OBJETOS TRIDIMENSIONAIS =================================
+
+def get_environment_obstacles_3d(sim, robot_radius=0.0, 
+                               botname=['turtlebot', 'robot', 'drone'], 
+                               keywords=['block', 'pillar', 'wall', 'parede', 'pilar'],
+                               wall_keywords=['cuboid']):
+    obstacles_data = []
+    wall_polygons = []
+    boundary_vertices = []
+    
+    try:
+        all_shapes = sim.getObjectsInTree(sim.handle_scene, sim.object_shape_type)
+        
+        for handle in all_shapes:
+            alias = sim.getObjectAlias(handle, 0).lower()
+            if any(bot in alias for bot in botname):
+                continue
+            
+            if any(kw in alias for kw in keywords) or any(kw in alias for kw in wall_keywords):
+                pos = sim.getObjectPosition(handle, -1) # pos[0]=X, pos[1]=Y, pos[2]=Z
+                ori = sim.getObjectOrientation(handle, -1)
+                angle_rad = ori[2]
+                
+                width, height, depth = 0.5, 0.5, 0.5 
+                
+                try:
+                    def read_param(param_id):
+                        val = sim.getObjectFloatParameter(handle, param_id)
+                        return val[1] if isinstance(val, (tuple, list)) else val
+
+                    max_x = read_param(sim.objfloatparam_objbbox_max_x)
+                    min_x = read_param(sim.objfloatparam_objbbox_min_x)
+                    max_y = read_param(sim.objfloatparam_objbbox_max_y)
+                    min_y = read_param(sim.objfloatparam_objbbox_min_y)
+                    max_z = read_param(sim.objfloatparam_objbbox_max_z) # Novo: Eixo Z
+                    min_z = read_param(sim.objfloatparam_objbbox_min_z) # Novo: Eixo Z
+
+                    width = max_x - min_x
+                    height = max_y - min_y
+                    depth = max_z - min_z # Altura 3D do objeto
+                except Exception:
+                    if 'wall' in alias or 'parede' in alias:
+                        width, height, depth = 2.0, 0.1, 2.0
+                
+                raw_obs = {
+                    'x': pos[0], 'y': pos[1], 'z': pos[2],
+                    'w': width, 'h': height, 'd': depth,
+                    'angle': angle_rad
+                }
+                
+                original_corners_2d = get_obb_corners(raw_obs)
+                is_wall = any(w_kw in alias for w_kw in wall_keywords)
+                
+                if is_wall:
+                    wall_polygons.append(ShapelyPolygon(original_corners_2d))
+                else:
+                    inflated_corners_2d = original_corners_2d
+                    
+                    # Inflar o 2D com Shapely (Para a base)
+                    if robot_radius > 0.0:
+                        try:
+                            shapely_poly = ShapelyPolygon(original_corners_2d)
+                            inflated_poly = shapely_poly.buffer(robot_radius, join_style=2)
+                            inflated_corners_2d = list(inflated_poly.exterior.coords)
+                        except Exception as e:
+                            print(f"[WARNING] Erro ao inflar obstáculo {alias}: {e}")
+                
+                    # Guardamos os dados 3D inflados (Inflamos as dimensões brutas matematicamente)
+                    obstacles_data.append({
+                        'x': pos[0],
+                        'y': pos[1],
+                        'z': pos[2], # Centro no eixo Z
+                        'w': width + (robot_radius * 2), # Largura inflada
+                        'h': height + (robot_radius * 2), # Profundidade Y inflada
+                        'd': depth + (robot_radius * 2), # Altura Z inflada (para o drone não bater por cima ou por baixo)
+                        'min_z': (pos[2] - (depth/2)) - robot_radius,
+                        'max_z': (pos[2] + (depth/2)) + robot_radius,
+                        'angle': angle_rad,
+                        'corners_2d': inflated_corners_2d, # Continua útil para debug
+                        'name': alias
+                    })
+
+        if wall_polygons:
+            combined_walls = unary_union(wall_polygons)
+            if len(combined_walls.interiors) > 0:
+                interior_poly = ShapelyPolygon(combined_walls.interiors[0])
+                if robot_radius > 0.0:
+                    interior_poly = interior_poly.buffer(-robot_radius, join_style=2)
+                boundary_vertices = list(interior_poly.exterior.coords)
+    except Exception as e:
+        print(f"[ERROR] Erro ao mapear cenário 3D: {e}")
+        
+    return obstacles_data, boundary_vertices, wall_polygons
+
+

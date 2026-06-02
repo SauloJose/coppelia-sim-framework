@@ -255,15 +255,13 @@ class PathPlanning(BaseApp):
                     if self.current_waypoint_idx >= len(self.waypoints):
                         self.logger.info("O robô completou a rota PRM e chegou ao destino!")
                         self.robot.set_wheel_velocity(linear_vel=0.0, angular_vel=0.0) # Freia o robô
-                        self.logger.info("Exibindo a imagem final e finalizando simulação...")
+                        self.logger.info("finalizando simulação...")
                         self.stop()
             else:
                 self.control.set_point = self.target_point
 
             # Executa o controlador (apenas se a simulação ainda estiver rodando)
             v_cmd, w_cmd = self.control.get_control(actual_point=actual_pos, dt=self.dt)
-            v_cmd = np.clip(v_cmd, -0.22, 0.22)
-            w_cmd = np.clip(w_cmd, -2.84, 2.84)
             
             self.robot.set_wheel_velocity(linear_vel=v_cmd, angular_vel=w_cmd)
 
