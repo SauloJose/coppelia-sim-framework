@@ -3,10 +3,9 @@ from pathfinding.core.diagonal_movement import DiagonalMovement
 from pathfinding.core.grid import Grid
 from pathfinding.finder.a_star import AStarFinder
 
+
 def simplify_path(full_path):
-    """
-    Filters the A* path keeping only the start, end, and turning points.
-    """
+    """Filtra o caminho A* mantendo apenas pontos de início, fim e virada."""
     if full_path is None or len(full_path) <= 2:
         return full_path
 
@@ -16,7 +15,6 @@ def simplify_path(full_path):
         v1 = full_path[i] - full_path[i-1]
         v2 = full_path[i+1] - full_path[i]
         
-        # 2D cross product to detect direction changes
         cross_product = v1[0] * v2[1] - v1[1] * v2[0]
         
         if not np.isclose(cross_product, 0.0, atol=1e-5):
@@ -27,23 +25,19 @@ def simplify_path(full_path):
 
 
 def astar(grid_map, start_world, goal_world):
-    """
-    Executes A* search and returns the simplified path in world coordinates (meters).
-    """
+    """Executa busca A* e retorna o caminho simplificado em coordenadas de mundo (metros)."""
     if grid_map is None:
         return None
 
     start_row, start_col = grid_map.world_to_grid(start_world[0], start_world[1])
     goal_row, goal_col = grid_map.world_to_grid(goal_world[0], goal_world[1])
     
-    # Validação preventiva: verifica se os pontos estão dentro das dimensões do mapa
     rows, cols = grid_map.matrix.shape
     if not (0 <= start_row < rows and 0 <= start_col < cols) or \
        not (0 <= goal_row < rows and 0 <= goal_col < cols):
         print("WARNING: Start or Goal is outside the grid bounds!")
         return None
     
-    # Validação de obstáculo usando sua lógica (1 = bloqueado)
     if grid_map.matrix[start_row, start_col] == 1:
         print("WARNING: Start position is blocked by an obstacle!")
         return None
@@ -67,7 +61,6 @@ def astar(grid_map, start_world, goal_world):
         
     world_path = []
     for node in path:
-        # Retorna para o formato do seu grid_map (linha=node.y, coluna=node.x)
         cx, cy = grid_map.grid_to_world(node.y, node.x)
         world_path.append([cx, cy])
         

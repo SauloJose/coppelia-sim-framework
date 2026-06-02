@@ -221,7 +221,6 @@ class PathPlanning(BaseApp):
             data_sensor = self.robot.get_sensor(sensor_name='LIDAR').update() 
             actual_pos = self.robot.pose 
 
-            # CONTROLADOR DE SEGUIMENTO DE CAMINHO (WAYPOINTS)
             if self.waypoints and self.current_waypoint_idx < len(self.waypoints):
                 ponto_alvo = self.waypoints[self.current_waypoint_idx]
                 

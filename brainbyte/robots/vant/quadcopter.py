@@ -15,27 +15,15 @@ class Quadcopter(BaseBot):
             robot_name: Nome do nó do drone no CoppeliaSim (ex: 'Quadcopter').
             target_name: Nome do objeto Dummy de alvo no CoppeliaSim (ex: 'base/target').
         """
-        # Inicializa a classe base (configura self.bridge, self.robot_name e self.robot_path)
         super().__init__(bridge, robot_name)
-        
-        # Caminho absoluto para o objeto alvo
         self.target_name = target_name
         self.target_path = f"/{robot_name}/{target_name}"
-        
-        # Estados internos para armazenar os últimos comandos enviados ao alvo
         self._target_pos = np.zeros(3)
         self._target_ori = np.zeros(3)
 
-    # ==========================================
-    # MÉTODOS OBRIGATÓRIOS DA BASEBOT (OVERRIDE)
-    # ==========================================
-
     def get_monitor_paths(self) -> list:
         """Estende a BaseBot para monitorar tanto o corpo do drone quanto o Target."""
-        # Pega os caminhos padrão do robô (/[robot_name]_pos e /[robot_name]_ori)
         paths = super().get_monitor_paths()
-        
-        # Adiciona o monitoramento do objeto Target para feedback visual/físico se necessário
         paths.extend([f"{self.target_path}_pos", f"{self.target_path}_ori"])
         return paths
 
@@ -48,18 +36,11 @@ class Quadcopter(BaseBot):
 
     def stop(self):
         """Implementação obrigatória do método abstrato. Para os controladores e estabiliza o alvo."""
-        # 1. Garante que qualquer controlador associado via 'add_control' seja interrompido
         super().stop()
-        
-        # 2. Rotina específica do drone: Força o target a manter a última posição conhecida para evitar desvios
         try:
             self.move_to(self._target_pos)
         except Exception as e:
             print(f"[Quadcopter] Erro ao estabilizar target no stop: {e}")
-
-    # ==========================================
-    # MÉTODOS ESPECÍFICOS DE MOVIMENTAÇÃO (3D)
-    # ==========================================
 
     @property
     def drone_pose_3d(self) -> tuple:
@@ -72,8 +53,6 @@ class Quadcopter(BaseBot):
             raise ValueError("A posição fornecida deve conter exatamente 3 coordenadas: [x, y, z].")
         
         self._target_pos = np.array(position, dtype=float)
-        
-        # Encapsula os dados para o interpretador Lua executar no bloco 'if msg.teleports'
         dados_teleporte = {'pos': self._target_pos.tolist()}
         self.bridge.queue_command('teleports', self.target_path, dados_teleporte)
 
@@ -83,8 +62,6 @@ class Quadcopter(BaseBot):
             raise ValueError("A orientação deve conter exatamente 3 elementos: [alpha, beta, gamma].")
             
         self._target_ori = np.array(orientation, dtype=float)
-        
-        # Encapsula os dados para o interpretador Lua executar no bloco 'if msg.teleports'
         dados_teleporte = {'ori': self._target_ori.tolist()}
         self.bridge.queue_command('teleports', self.target_path, dados_teleporte)
 
