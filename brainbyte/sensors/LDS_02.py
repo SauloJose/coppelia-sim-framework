@@ -9,12 +9,6 @@ class LDS_02(BaseSensor):
     This class interfaces with a vision sensor that provides point cloud data,
     typically attached to a robot. It reads the point cloud in the sensor's local
     frame and optionally transforms it to world coordinates.
-
-    Args:
-        bridge: CoppeliaSim simulation API object to send data.
-        base_name (str): Full path to the vision sensor object in the scene.
-        max_cache_points (int, optional): Max total points to keep in the
-            accumulated cache. None means no limit.
     """
     _lidar_handle_template = "/{}/{}"                
     _lidar_base_handle_template = "/{}/{}"           #ex:  base_name/base_link
@@ -77,72 +71,37 @@ class LDS_02(BaseSensor):
             self._last_points_world = points
             return points
         
-        # get the homography matrix from Coppelia.
         m = self.bridge.get_sensor_data(f"{self._lidar_path}_matrix")
         if m is None:
             return points # Fallback de segurança
 
-        # building the homography matrix
-        # m = [R T]  -> Convert the robot coordenate to real world coordenate.
-        # In this line I want to convert m in homogêneos coordenates
-        # mh = [R       T] 
-        #      [[0,0,0] 1] => Projection.
         h_matrix = np.array(m).reshape(3, 4)
         h_matrix = np.vstack([h_matrix, [0, 0, 0, 1]])
 
-        # Convert points to homogeneous coordinates
-        # P = [x,y,z]^t => P=[x,y,z,1]^t
         ones = np.ones((points.shape[0], 1))  
         points_homo = np.hstack([points, ones]) 
 
-        # Transform: P_world = H @ P_local
-        # Obs: Points (N,4) => Points.T (4,N) (Now we applie H_matrix to each points)
-        # at finally get the (N,4) points again.
         points_world_homo = (h_matrix @ points_homo.T).T 
         
         self._last_points_world = points_world_homo[:, :3]
         return self._last_points_world
     
     def update(self):
-        """
-        Read the point cloud and transform to world coordinates (Zero-lag).
-        Returns: np.ndarray: World-frame points with shape (N, 3).
-        """
+        """ Read the point cloud and transform to world coordinates (Zero-lag). """
         local_pts = self._read_lidar()
         world_pts = self._transform_to_world(local_pts)
         return world_pts
     
     def read_lidar_local(self):
-        """
-        Get the point cloud in the robot coordinates.
-        """
+        """ Get the point cloud in the robot coordinates. """
         return self._read_lidar()
     
     def get_cloud_points(self, world_coordinates=True):
-        """
-        Return the last captured point cloud.
-
-        Args:
-            world_coordinates (bool): If True, returns points in world frame;
-                                      if False, in sensor's local frame.
-
-        Returns:
-            np.ndarray: Point cloud array (N, 3) or empty array if no data.
-        """
         return self._last_points_world if world_coordinates else self._last_points_local
     
     def get_cloud_points_sectores(self):
         """
         Returns the local point cloud divided into real geometric sectors.
-
-        Even if the sensor fails or omits readings, the sectors remain accurate.
-
-        Returns:
-
-        left (np.ndarray): Matrix (M, 3) with points in the left sector.
-        front (np.ndarray): Matrix (K, 3) with points in the front cone.
-        right (np.ndarray): Matrix (P, 3) with points in the right sector.
-        back (np.ndarray): Matrix (Q, 3) with points in the back sector.
         """
         local_pts = self._read_lidar()
         
@@ -152,21 +111,13 @@ class LDS_02(BaseSensor):
 
         x = local_pts[:, 0]
         y = local_pts[:, 1]
-
-        # Arc tangent calculates heading angle in radians [-pi, pi]
         angles = np.arctan2(y, x)
 
-        # Boolean masks matching specific geometric fields of view
-        # front = 30 degrees
-        # left = 120 
-        # right = 120
-        # back = 90
         mask_front = (angles > np.deg2rad(-30)) & (angles < np.deg2rad(30))
         mask_left  = (angles >= np.deg2rad(30)) & (angles <= np.deg2rad(150))
         mask_right = (angles >= np.deg2rad(-150)) & (angles <= np.deg2rad(-30))
         mask_back  = (angles > np.deg2rad(150)) | (angles < np.deg2rad(-150))
 
-        # Array slicing using boolean masks
         front = local_pts[mask_front]
         left  = local_pts[mask_left]
         right = local_pts[mask_right]
@@ -174,7 +125,77 @@ class LDS_02(BaseSensor):
 
         return left, front, right, back
 
-    # Getters e Setters
+    def get_distances(self):
+        """
+        Converte a nuvem de pontos local em Arrays de distâncias e ângulos,
+        ordenados do menor para o maior ângulo.
+        
+        Retorna:
+            distances (np.ndarray): Distâncias em metros.
+            angles (np.ndarray): Ângulos correspondentes em radianos [-pi a pi].
+        """
+        local_pts = self._read_lidar()
+        if local_pts is None or local_pts.size == 0:
+            return np.array([]), np.array([])
+            
+        x = local_pts[:, 0]
+        y = local_pts[:, 1]
+        
+        # np.hypot calcula sqrt(x^2 + y^2) (A distância direta 2D do sensor até o ponto)
+        distances = np.hypot(x, y)
+        angles = np.arctan2(y, x)
+        
+        # Ordena os pontos pelo ângulo para que o acesso por índice seja previsível
+        # índice 0 = direita/trás (-180º) | índice do meio = frente (0º) | último = esquerda/trás (+180º)
+        sorted_indices = np.argsort(angles)
+        
+        return distances[sorted_indices], angles[sorted_indices]
+
+    def get_sector_min_distances(self, max_range=3.0):
+        """
+        Retorna a menor distância detectada nos 4 setores geométricos padrões (Esq, Fren, Dir, Trás).
+        Excelente para usar em lógicas de colisão ou estados básicos de RL.
+        """
+        left, front, right, back = self.get_cloud_points_sectores()
+        
+        def min_dist(pts):
+            if pts.size == 0:
+                return max_range # Se não há pontos, retorna distância livre máxima
+            return np.min(np.hypot(pts[:, 0], pts[:, 1]))
+            
+        return {
+            'left': min_dist(left),
+            'front': min_dist(front),
+            'right': min_dist(right),
+            'back': min_dist(back)
+        }
+
+    def get_rl_distances(self, num_sectors=8, max_range=3.0):
+        """
+        Divide toda a leitura de 360º do LiDAR em 'num_sectors' fatias iguais 
+        e retorna a MENOR distância dentro de cada fatia. 
+        
+        Este método já retorna o array (ex: 8 valores contínuos) perfeito para 
+        concatenar direto no estado (state) da sua Rede Neural.
+        """
+        distances, angles = self.get_distances()
+        if distances.size == 0:
+            return np.full(num_sectors, max_range)
+            
+        # Cria as fronteiras (bins) de ângulos. Ex para 8 setores: de -180 a 180 em 8 passos.
+        bins = np.linspace(-np.pi, np.pi, num_sectors + 1)
+        
+        rl_state = []
+        for i in range(num_sectors):
+            # Encontra todos os pontos que o ângulo cai dentro dessa "fatia"
+            mask = (angles >= bins[i]) & (angles < bins[i+1])
+            if np.any(mask):
+                rl_state.append(np.min(distances[mask]))
+            else:
+                rl_state.append(max_range) # Sem obstáculo na fatia
+                
+        return np.array(rl_state)
+
     @property
     def is_range_data(self):
         return self._is_range_data
@@ -182,7 +203,6 @@ class LDS_02(BaseSensor):
     @is_range_data.setter
     def is_range_data(self, value):
         self._is_range_data = value
-
 
 
 #class to cache data of the LiDar Sensor:

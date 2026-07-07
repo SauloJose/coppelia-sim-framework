@@ -43,7 +43,6 @@ class PotentialFieldPlanner:
         diff = current_pos - all_pts
         dists = np.linalg.norm(diff, axis=1)
 
-        # CORREÇÃO 1: Filtrar "Pontos Fantasmas" e o próprio corpo do robô.
         # Qualquer leitura menor que 0.15m (raio do robô) é considerada ruído do sensor (raio vazio = 0.0)
         valid_points_mask = dists > 0.15
 
@@ -66,7 +65,6 @@ class PotentialFieldPlanner:
         directions = valid_diff / valid_dists[:, None]
         f_rep = np.sum(directions * rep_magnitudes[:, None], axis=0)
         
-        # CORREÇÃO 2: Limitar (Clipping) a força repulsiva máxima.
         # Impede que a força atinja valores exorbitantes que quebrem a estabilidade do PID.
         f_rep_norm = np.linalg.norm(f_rep)
         max_rep_force = 5.0  # Ajuste esse valor dependendo de quão agressiva você quer a repulsão
